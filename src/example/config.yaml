@@ -58,6 +58,12 @@ pipeline:
 
   - type: sum
 
+  - type: metadata
+    namespace: tester
+    labels:
+      app: appname
+    name: "{{ meta.name|default('unknown') + '-' + meta.shortsum }}"
+
   - type: stdout
     prefix: "******** BEGIN ********"
     suffix: "********  END  ********"

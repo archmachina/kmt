@@ -76,6 +76,10 @@ def process_args() -> int:
             handlers.SupportHandlerExtractGVKN
         ])
 
+        pipeline.add_handlers({
+            "metadata": handlers.HandlerMetadata
+        })
+
         # Add the steps we've defined to the pipeline
         for step in steps:
             pipeline.add_step(step)
