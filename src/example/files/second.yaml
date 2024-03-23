@@ -1,0 +1,12 @@
+---
+name: Second YAML document
+
+
+config_value: {{ replace_value }}
+
+config2: {{ override }}
+
+filename: {{ ttast_meta_filename }}
+tags: {{ tags }}
+
+original_filename: {{ meta.import_filename | default('Unknown') }}

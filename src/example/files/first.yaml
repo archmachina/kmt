@@ -1,0 +1,15 @@
+---
+name: First YAML document
+
+tags: TTAST_TAGS
+
+original_filename: {{ meta.import_filename | default('Unknown') }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test
+
+name: Second document in first.yaml
+
+value: test

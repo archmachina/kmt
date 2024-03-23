@@ -1,0 +1,7 @@
+---
+test: 1223
+other: REPLACE_VALUE_HERE
+
+template: {{ override }}
+
+original_filename: {{ meta.filename | default('Unknown') }}

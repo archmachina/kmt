@@ -1,0 +1,67 @@
+vars:
+  replace_value: 7890
+  other_replacement: "BOOT"
+  env_var: "{{ env.TEST_VAR | default('TEST_VAR unset') }}"
+  import_tag: "tester12"
+
+pipeline:
+  # - type: config
+  #   stdin: true
+
+  - type: stdin
+    apply_tags:
+      - stdin
+      - "{{ import_tag }}"
+
+  - type: import
+    files:
+      - "example/files/**/*.yaml"
+    recursive: true
+    apply_tags:
+      - yaml
+      - import
+      - "{{ import_tag }}"
+
+  - type: split_yaml
+
+  - type: replace
+    replace:
+      - key: REPLACE_VALUE_HERE
+        value: "{{ replace_value / 2 }}"
+      - key: "Y..."
+        value: "{{ other_replacement }}"
+        regex: true
+      - key: "TTAST_TAGS"
+        value: "{{ ttast_tags }}"
+
+  - type: template
+    vars:
+      override: frog
+    match_any_tags:
+      - import
+    apply_tags:
+      - templated
+
+  - type: template
+    vars:
+      override: "{{ other_replacement }}"
+    exclude_tags:
+      - templated
+    apply_tags:
+      - templated
+
+  - type: meta
+    match_any_tags:
+      - yaml
+    vars:
+      document_type: yaml
+
+  - type: sum
+
+  - type: stdout
+    prefix: "******** BEGIN ********"
+    suffix: "********  END  ********"
+    when:
+      - "'import' in tags or 'stdin' in tags"
+      - "meta.k8s_kind|default('') == 'Deployment'"
+      #- "'second' in meta.filename"
