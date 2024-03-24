@@ -3,7 +3,7 @@ import logging
 import copy
 import yaml
 
-from .util import *
+from ttast.util import validate, pop_property
 
 logger = logging.getLogger(__name__)
 
