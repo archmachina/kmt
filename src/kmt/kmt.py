@@ -73,7 +73,8 @@ def process_args() -> int:
         # Add our custom handlers and support handlers
         pipeline.add_support_handlers([
             handlers.SupportHandlerSplitYaml,
-            handlers.SupportHandlerExtractGVKN
+            handlers.SupportHandlerExtractMetadata,
+            handlers.SupportHandlerStoreParsed
         ])
 
         pipeline.add_handlers({

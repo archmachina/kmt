@@ -62,61 +62,87 @@ class HandlerMetadata(ttast.Handler):
 
         block.text = yaml.dump(manifest)
 
-class SupportHandlerExtractGVKN(ttast.SupportHandler):
+class SupportHandlerExtractMetadata(ttast.SupportHandler):
     def parse(self):
         pass
 
     def pre(self, block):
         if block is None:
             return
-        
+
         # Best effort extract of Group, Version, Kind, Name from the object, if
         # it is yaml
 
+        manifest = None
         try:
             manifest = yaml.safe_load(block.text)
+            if not isinstance(manifest, dict):
+                logger.debug(f"ExtractMetadata: Parsed yaml is not a dictionary")
+                manifest = None
         except yaml.YAMLError as exc:
-            logger.debug(f"ExtractGVKN: Could not parse input object: {exc}")
-            return
-
-        # Make sure we're working with a dictionary
-        if not isinstance(manifest, dict):
-            logger.debug(f"ExtractGVKN: Parsed yaml is not a dictionary")
-            return
+            logger.debug(f"ExtractMetadata: Could not parse input object: {exc}")
 
         api_version = ""
         group = ""
         version = ""
         name = ""
         kind = ""
+        namespace = ""
 
-        # api version
-        api_version = manifest.get("apiVersion", "")
+        if manifest is not None:
+            # api version
+            api_version = manifest.get("apiVersion", "")
 
-        # group and version
-        if api_version != "":
-            split = api_version.split("/")
+            # group and version
+            if api_version != "":
+                split = api_version.split("/")
 
-            if len(split) == 1:
-                version = split[0]
-            elif len(split) == 2:
-                group = split[0]
-                version = split[1]
+                if len(split) == 1:
+                    version = split[0]
+                elif len(split) == 2:
+                    group = split[0]
+                    version = split[1]
 
-        # Kind
-        kind = manifest.get("kind")
+            # Kind
+            kind = manifest.get("kind")
 
-        # Name
-        metadata = manifest.get("metadata")
-        if isinstance(metadata, dict):
-            name = metadata.get("name", "")
+            # Name and Namespace
+            metadata = manifest.get("metadata")
+            if isinstance(metadata, dict):
+                name = metadata.get("name", "")
+                namespace = metadata.get("namespace", "")
 
         block.meta["k8s_name"] = name
+        block.meta["k8s_namespace"] = namespace
         block.meta["k8s_kind"] = kind
         block.meta["k8s_group"] = group
         block.meta["k8s_version"] = version
         block.meta["k8s_api_version"] = api_version
 
+
+    def post(self, block):
+        pass
+
+class SupportHandlerStoreParsed(ttast.SupportHandler):
+    def parse(self):
+        pass
+
+    def pre(self, block):
+        if block is None:
+            return
+
+        # Best effort parse of the object and store in the meta for the object
+
+        manifest = None
+        try:
+            manifest = yaml.safe_load(block.text)
+            if not isinstance(manifest, dict):
+                logger.debug(f"StoreParsed: Parsed yaml is not a dictionary")
+                manifest = None
+        except yaml.YAMLError as exc:
+            logger.debug(f"StoreParsed: Could not parse input object: {exc}")
+
+        block.meta["k8s_manifest"] = manifest
 
     def post(self, block):
         pass
