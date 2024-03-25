@@ -37,7 +37,7 @@ class HandlerMetadata(ttast.Handler):
         # Make sure we're working with a dictionary
         validate(isinstance(manifest, dict), f"Parsed yaml must be a dictionary: {type(manifest)}")
 
-        if "metadata" not in manifest:
+        if manifest.get("metadata") is None:
             manifest["metadata"] = {}
 
         if self.name is not None:
@@ -47,14 +47,14 @@ class HandlerMetadata(ttast.Handler):
             manifest["metadata"]["namespace"] = self.namespace
 
         if self.annotations is not None:
-            if "annotations" not in manifest["metadata"]:
+            if manifest["metadata"].get("annotations") is None:
                 manifest["metadata"]["annotations"] = {}
 
             for key in self.annotations:
                 manifest["metadata"]["annotations"][key] = self.annotations[key]
 
         if self.labels is not None:
-            if "labels" not in manifest["metadata"]:
+            if manifest["metadata"].get("labels") is None:
                 manifest["metadata"]["labels"] = {}
 
             for key in self.labels:
@@ -104,7 +104,7 @@ class SupportHandlerExtractMetadata(ttast.SupportHandler):
                     version = split[1]
 
             # Kind
-            kind = manifest.get("kind")
+            kind = manifest.get("kind", "")
 
             # Name and Namespace
             metadata = manifest.get("metadata")
