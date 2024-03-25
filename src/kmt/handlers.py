@@ -3,22 +3,22 @@ import logging
 import copy
 import yaml
 
-from ttast.util import validate, pop_property
+from ttast.util import validate
 
 logger = logging.getLogger(__name__)
 
 class HandlerMetadata(ttast.Handler):
     def parse(self):
-        self.name = pop_property(self.state.step_def, "name", template_map=self.state.vars)
+        self.name = self.state.templater.extract_property(self.state.step_def, "name")
         validate(isinstance(self.name, str) or self.name is None, "Name is not a string")
 
-        self.namespace = pop_property(self.state.step_def, "namespace", template_map=self.state.vars)
+        self.namespace = self.state.templater.extract_property(self.state.step_def, "namespace")
         validate(isinstance(self.namespace, str) or self.namespace is None, "Namespace is not a string")
 
-        self.annotations = pop_property(self.state.step_def, "annotations", template_map=self.state.vars)
+        self.annotations = self.state.templater.extract_property(self.state.step_def, "annotations")
         validate(isinstance(self.annotations, dict) or self.annotations is None, "Annotations is not a dictionary")
 
-        self.labels = pop_property(self.state.step_def, "labels", template_map=self.state.vars)
+        self.labels = self.state.templater.extract_property(self.state.step_def, "labels")
         validate(isinstance(self.labels, dict) or self.labels is None, "Labels is not a dictionary")
 
     def is_per_block():

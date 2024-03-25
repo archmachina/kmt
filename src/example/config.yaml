@@ -1,12 +1,7 @@
 vars:
-  replace_value: 7890
-  other_replacement: "BOOT"
-  env_var: "{{ env.TEST_VAR | default('TEST_VAR unset') }}"
-  import_tag: "tester12"
+  replace_value: 100
 
 pipeline:
-  # - type: config
-  #   stdin: true
 
   - type: stdin
     apply_tags:
@@ -21,8 +16,6 @@ pipeline:
       - yaml
       - import
       - "{{ import_tag }}"
-
-  - type: split_yaml
 
   - type: replace
     replace:
