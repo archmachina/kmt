@@ -49,6 +49,19 @@ pipeline:
     vars:
       document_type: yaml
 
+  - type: jsonpatch
+    patches:
+      - op: add
+        path: "/metadata/annotations"
+        value: {}
+      - op: add
+        path: "/metadata/annotations/test"
+        value: 10
+      - op: add
+        path: "/metadata/annotations/other"
+        value: 12
+    match_kind: "StatefulSet|Deployment"
+
   - type: sum
 
   - type: metadata

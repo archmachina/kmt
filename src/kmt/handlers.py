@@ -3,6 +3,7 @@ import logging
 import copy
 import yaml
 import re
+import jsonpatch
 
 from ttast.util import validate
 
@@ -14,6 +15,35 @@ def str_representer(dumper, data):
     return dumper.represent_scalar("tag:yaml.org,2002:str", data)
 
 yaml.add_representer(str, str_representer)
+
+class HandlerJsonPatch(ttast.Handler):
+    def parse(self):
+        self.patches = self.state.templater.extract_property(self.state.step_def, "patches")
+        validate(isinstance(self.patches, list), "Invalid patch list supplied")
+        validate(all(isinstance(x, dict) for x in self.patches), "Invalid patch list supplied")
+
+    def is_per_block():
+        return True
+
+    def run(self, block):
+        if block is None:
+            return
+
+        # The text blocks must be valid yaml or this handler will (and should) fail
+        manifest = yaml.safe_load(block.text)
+        if manifest is None:
+            # Empty yaml document. Just return
+            return
+
+        # Make sure we're working with a dictionary
+        validate(isinstance(manifest, dict), f"Parsed yaml must be a dictionary: {type(manifest)}")
+
+        # Apply the patches to the manifest object
+        patch_list = jsonpatch.JsonPatch(self.patches)
+        manifest = patch_list.apply(manifest)
+
+        # Save the yaml format back to the block
+        block.text = yaml.dump(manifest, explicit_start=True)
 
 class HandlerMetadata(ttast.Handler):
     def parse(self):

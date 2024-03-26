@@ -84,7 +84,8 @@ def process_args() -> int:
         ])
 
         pipeline.add_handlers({
-            "metadata": handlers.HandlerMetadata
+            "metadata": handlers.HandlerMetadata,
+            "jsonpatch": handlers.HandlerJsonPatch
         })
 
         # Add the steps we've defined to the pipeline
