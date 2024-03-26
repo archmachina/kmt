@@ -67,7 +67,7 @@ class HandlerMetadata(ttast.Handler):
             for key in self.labels:
                 manifest["metadata"]["labels"][key] = self.labels[key]
 
-        block.text = yaml.dump(manifest)
+        block.text = yaml.dump(manifest, explicit_start=True)
 
 class SupportHandlerExtractMetadata(ttast.SupportHandler):
     def parse(self):
