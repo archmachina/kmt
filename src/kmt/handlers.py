@@ -7,6 +7,13 @@ from ttast.util import validate
 
 logger = logging.getLogger(__name__)
 
+def str_representer(dumper, data):
+    if isinstance(data, str) and '\n' in data:
+        return dumper.represent_scalar("tag:yaml.org,2002:str", data, style="|")
+    return dumper.represent_scalar("tag:yaml.org,2002:str", data)
+
+yaml.add_representer(str, str_representer)
+
 class HandlerMetadata(ttast.Handler):
     def parse(self):
         self.name = self.state.templater.extract_property(self.state.step_def, "name")
