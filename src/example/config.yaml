@@ -55,25 +55,27 @@ pipeline:
     namespace: tester
     labels:
       app: appname
-    name: "{{ meta.name|default('unknown') + '-' + meta.shortsum }}"
+    name: "{{ meta.k8s_name|default('unknown') + '-' + meta.shortsum }}"
 
   - type: metadata
     annotations:
       reloader.stakater.com/auto: "true"
     when:
-      - 'meta.k8s_kind == "DaemonSet" or meta.k8s_kind == "Deployment" or meta.k8s_kind == "StatefulSet"'
+      - 'meta.k8s_kind in ["DaemonSet", "StatefulSet", "Deployment"]'
 
   - type: metadata
     annotations:
       kubernetes.io/ingress.class: nginx
       nginx.ingress.kubernetes.io/backend-protocol: HTTPS
     when:
-      - 'meta.k8s_kind == "Ingress"'
+      - 'meta.k8s_kind in ["Ingress"]'
 
   - type: stdout
     prefix: "******** BEGIN ********"
     suffix: "********  END  ********"
-    when:
-      - "'import' in tags or 'stdin' in tags"
-      - "meta.k8s_kind|default('') == 'Deployment'"
+    match_kind: "StatefulSet|Deployment"
+    # match_name: beatload-dp
+    # when:
+    #   - "'import' in tags or 'stdin' in tags"
+    #   - "meta.k8s_kind|default('') == 'Deployment'"
       #- "'second' in meta.filename"

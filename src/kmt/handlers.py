@@ -2,6 +2,7 @@ import ttast
 import logging
 import copy
 import yaml
+import re
 
 from ttast.util import validate
 
@@ -69,9 +70,22 @@ class HandlerMetadata(ttast.Handler):
 
         block.text = yaml.dump(manifest, explicit_start=True)
 
-class SupportHandlerExtractMetadata(ttast.SupportHandler):
+class SupportHandlerK8sMetadata(ttast.SupportHandler):
     def parse(self):
-        pass
+        self.match_group = self.state.templater.extract_property(self.state.step_def, "match_group")
+        validate(isinstance(self.match_group, str) or self.match_group is None, "Invalid match_group value")
+
+        self.match_version = self.state.templater.extract_property(self.state.step_def, "match_version")
+        validate(isinstance(self.match_version, str) or self.match_version is None, "Invalid match_version value")
+
+        self.match_kind = self.state.templater.extract_property(self.state.step_def, "match_kind")
+        validate(isinstance(self.match_kind, str) or self.match_kind is None, "Invalid match_kind value")
+
+        self.match_namespace = self.state.templater.extract_property(self.state.step_def, "match_namespace")
+        validate(isinstance(self.match_namespace, str) or self.match_namespace is None, "Invalid match_namespace value")
+
+        self.match_name = self.state.templater.extract_property(self.state.step_def, "match_name")
+        validate(isinstance(self.match_name, str) or self.match_name is None, "Invalid match_name value")
 
     def pre(self, block):
         if block is None:
@@ -92,9 +106,9 @@ class SupportHandlerExtractMetadata(ttast.SupportHandler):
         api_version = ""
         group = ""
         version = ""
-        name = ""
         kind = ""
         namespace = ""
+        name = ""
 
         if manifest is not None:
             # api version
@@ -119,37 +133,33 @@ class SupportHandlerExtractMetadata(ttast.SupportHandler):
                 name = metadata.get("name", "")
                 namespace = metadata.get("namespace", "")
 
-        block.meta["k8s_name"] = name
-        block.meta["k8s_namespace"] = namespace
-        block.meta["k8s_kind"] = kind
         block.meta["k8s_group"] = group
         block.meta["k8s_version"] = version
+        block.meta["k8s_kind"] = kind
+        block.meta["k8s_namespace"] = namespace
+        block.meta["k8s_name"] = name
         block.meta["k8s_api_version"] = api_version
-
-
-    def post(self, block):
-        pass
-
-class SupportHandlerStoreParsed(ttast.SupportHandler):
-    def parse(self):
-        pass
-
-    def pre(self, block):
-        if block is None:
-            return
-
-        # Best effort parse of the object and store in the meta for the object
-
-        manifest = None
-        try:
-            manifest = yaml.safe_load(block.text)
-            if not isinstance(manifest, dict):
-                logger.debug(f"StoreParsed: Parsed yaml is not a dictionary")
-                manifest = None
-        except yaml.YAMLError as exc:
-            logger.debug(f"StoreParsed: Could not parse input object: {exc}")
-
         block.meta["k8s_manifest"] = manifest
+
+        # k8s group match
+        if self.match_group is not None and not re.search(self.match_group, block.meta["k8s_group"]):
+            return []
+
+        # k8s version match
+        if self.match_version is not None and not re.search(self.match_version, block.meta["k8s_version"]):
+            return []
+
+        # k8s kind match
+        if self.match_kind is not None and not re.search(self.match_kind, block.meta["k8s_kind"]):
+            return []
+
+        # k8s namespace match
+        if self.match_namespace is not None and not re.search(self.match_namespace, block.meta["k8s_namespace"]):
+            return []
+
+        # k8s name match
+        if self.match_name is not None and not re.search(self.match_name, block.meta["k8s_name"]):
+            return []
 
     def post(self, block):
         pass

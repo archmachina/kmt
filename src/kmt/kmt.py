@@ -68,13 +68,19 @@ def process_args() -> int:
 
         # Include the default handlers and support handlers
         pipeline.add_handlers(ttast.builtin_handlers())
-        pipeline.add_support_handlers(ttast.builtin_support_handlers())
+        # pipeline.add_support_handlers(ttast.builtin_support_handlers())
 
         # Add our custom handlers and support handlers
         pipeline.add_support_handlers([
             handlers.SupportHandlerSplitYaml,
-            handlers.SupportHandlerExtractMetadata,
-            handlers.SupportHandlerStoreParsed
+
+            # Run K8sMetadata before other conditionals so that they
+            # have access to k8s properties
+            handlers.SupportHandlerK8sMetadata,
+
+            ttast.builtin.SupportHandlerMatchTags,
+            ttast.builtin.SupportHandlerWhen,
+            ttast.builtin.SupportHandlerTags
         ])
 
         pipeline.add_handlers({
