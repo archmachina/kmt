@@ -18,7 +18,7 @@ yaml.add_representer(str, str_representer)
 
 class HandlerJsonPatch(ttast.Handler):
     def parse(self):
-        self.patches = self.state.templater.extract_property(self.state.step_def, "patches")
+        self.patches = self.state.templater.extract_property(self.state.step_def, "patches", types=list)
         validate(isinstance(self.patches, list), "Invalid patch list supplied")
         validate(all(isinstance(x, dict) for x in self.patches), "Invalid patch list supplied")
 
@@ -53,10 +53,10 @@ class HandlerMetadata(ttast.Handler):
         self.namespace = self.state.templater.extract_property(self.state.step_def, "namespace")
         validate(isinstance(self.namespace, str) or self.namespace is None, "Namespace is not a string")
 
-        self.annotations = self.state.templater.extract_property(self.state.step_def, "annotations")
+        self.annotations = self.state.templater.extract_property(self.state.step_def, "annotations", types=dict)
         validate(isinstance(self.annotations, dict) or self.annotations is None, "Annotations is not a dictionary")
 
-        self.labels = self.state.templater.extract_property(self.state.step_def, "labels")
+        self.labels = self.state.templater.extract_property(self.state.step_def, "labels", types=dict)
         validate(isinstance(self.labels, dict) or self.labels is None, "Labels is not a dictionary")
 
     def is_per_block():
