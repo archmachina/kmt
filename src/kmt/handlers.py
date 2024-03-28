@@ -163,6 +163,9 @@ class SupportHandlerK8sMetadata(ttast.SupportHandler):
                 name = metadata.get("name", "")
                 namespace = metadata.get("namespace", "")
 
+            # Save the parsed manifest back to the block to normalise the yaml format
+            block.text = yaml.dump(manifest)
+
         block.meta["k8s_group"] = group
         block.meta["k8s_version"] = version
         block.meta["k8s_kind"] = kind
