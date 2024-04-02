@@ -8,8 +8,11 @@ import sys
 
 from .exception import *
 from .util import *
-import ttast
+
+from . import types
 from . import handlers
+from . import filters
+from . import support_handlers
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +28,7 @@ def process_args() -> int:
 
     # Parser configuration
     parser.add_argument(
-        "-c", action="append", dest="configs", help="Configuration files"
+        "-c", action="store", dest="configdir", help="Configuration directory"
     )
 
     parser.add_argument(
@@ -36,7 +39,7 @@ def process_args() -> int:
 
     # Capture argument options
     debug = args.debug
-    configs = args.configs
+    configdir = args.configdir
 
     # Logging configuration
     level = logging.WARNING
@@ -46,51 +49,7 @@ def process_args() -> int:
     logging.basicConfig(level=level, format="%(levelname)s: %(message)s")
 
     try:
-        # Add each config as a pipeline step, which will read and merge the config
-        steps = list()
-        if configs is not None:
-            for config_item in configs:
-                # If '-' is specified, read the configuration from stdin
-                if config_item == "-":
-                    step_def = {
-                        "type": "config",
-                        "stdin": True
-                    }
-                else:
-                    step_def = {
-                        "type": "config",
-                        "file": config_item
-                    }
-
-                steps.append(step_def)
-
-        pipeline = ttast.Pipeline()
-
-        # Include the default handlers and support handlers
-        pipeline.add_handlers(ttast.builtin_handlers())
-        # pipeline.add_support_handlers(ttast.builtin_support_handlers())
-
-        # Add our custom handlers and support handlers
-        pipeline.add_support_handlers([
-            handlers.SupportHandlerSplitYaml,
-
-            # Run K8sMetadata before other conditionals so that they
-            # have access to k8s properties
-            handlers.SupportHandlerK8sMetadata,
-
-            ttast.builtin.SupportHandlerMatchTags,
-            ttast.builtin.SupportHandlerWhen,
-            ttast.builtin.SupportHandlerTags
-        ])
-
-        pipeline.add_handlers({
-            "metadata": handlers.HandlerMetadata,
-            "jsonpatch": handlers.HandlerJsonPatch
-        })
-
-        # Add the steps we've defined to the pipeline
-        for step in steps:
-            pipeline.add_step(step)
+        pipeline = types.Pipeline(configdir)
 
         # Start executing the pipeline
         pipeline.run()

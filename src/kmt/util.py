@@ -1,36 +1,37 @@
 
 import jinja2
 import logging
+import hashlib
+import textwrap
 
 from .exception import *
+from . import types
 
 logger = logging.getLogger(__name__)
 
-def template_if_string(val, mapping):
-    if val is not None and isinstance(val, str):
-        try:
-            environment = jinja2.Environment()
+def validate(val, message):
+    if not val:
+        raise ValidationException(message)
 
-            template = environment.from_string(val)
-            return template.render(mapping)
-        except KeyError as e:
-            raise PipelineRunException(f"Missing key in template substitution: {e}") from e
+def block_sum(block):
+    validate(isinstance(block, types.TextBlock), "Invalid text block passed to _block_sum")
 
-    return val
+    md5 = hashlib.md5()
+    sha1 = hashlib.sha1()
+    sha256 = hashlib.sha256()
 
-def parse_bool(obj) -> bool:
-    if obj is None:
-        raise PipelineRunException("None value passed to parse_bool")
+    encode = block.text.encode("utf-8")
+    md5.update(encode)
+    sha1.update(encode)
+    sha256.update(encode)
 
-    if isinstance(obj, bool):
-        return obj
+    block.meta["md5sum"] = md5.hexdigest()
+    block.meta["sha1sum"] = sha1.hexdigest()
+    block.meta["sha256sum"] = sha256.hexdigest()
 
-    obj = str(obj)
+    short = 0
+    short_wrap = textwrap.wrap(sha256.hexdigest(), 8)
+    for item in short_wrap:
+        short = short ^ int(item, 16)
 
-    if obj.lower() in ["true", "1"]:
-        return True
-
-    if obj.lower() in ["false", "0"]:
-        return False
-
-    raise PipelineRunException(f"Unparseable value ({obj}) passed to parse_bool")
+    block.meta["shortsum"] = format(short, 'x')

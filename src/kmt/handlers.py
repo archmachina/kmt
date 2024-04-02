@@ -1,31 +1,319 @@
-import ttast
 import logging
 import copy
 import yaml
 import re
 import jsonpatch
+import os
+import glob
+import sys
+import hashlib
+import base64
+import textwrap
 
-from ttast.util import validate
+from .util import validate
+from . import types
+from .exception import PipelineRunException
 
 logger = logging.getLogger(__name__)
 
-def str_representer(dumper, data):
-    if isinstance(data, str) and '\n' in data:
-        return dumper.represent_scalar("tag:yaml.org,2002:str", data, style="|")
-    return dumper.represent_scalar("tag:yaml.org,2002:str", data)
+class HandlerConfig(types.Handler):
+    """
+    """
+    def parse(self, step_def):
+        # Read the content from the file and use _process_config_content to do the work
+        self.config_file = self.state.templater.extract_property(step_def, "file")
+        validate(isinstance(self.config_file, str) or self.config_file is None, "Step 'config_file' must be a string or absent")
+        validate(not isinstance(self.config_file, str) or self.config_file != "", "Step 'config_file' cannot be empty")
 
-yaml.add_representer(str, str_representer)
+        # Extract the content var, which can be either a dict or yaml string
+        self.config_content = self.state.templater.extract_property(step_def, "content")
+        validate(isinstance(self.config_content, (str, dict)) or self.config_content is None, "Step 'config_content' must be a string, dict or absent")
 
-class HandlerJsonPatch(ttast.Handler):
-    def parse(self):
-        self.patches = self.state.templater.extract_property(self.state.step_def, "patches", types=list)
+        # Extract stdin bool, indicating whether to read config from stdin
+        self.stdin = self.state.templater.extract_property(step_def, "stdin", types=bool, default=False)
+        validate(isinstance(self.stdin, bool), "Step 'stdin' must be a bool, bool like string or absent")
+
+    def run(self):
+
+        # Working dir - If the configuration source is a file, the working directory should be set
+        # to the dirname for the config file. Otherwise, the working dir should be inherited from the calling
+        # step, which is referenced by self.state.workingdir
+        # However, if a step has defined the workingdir, it shouldn't be overridden
+
+        if self.config_file is not None:
+            logger.debug(f"config: including config from file {self.config_file}")
+            with open(self.config_file, "r", encoding='utf-8') as file:
+                content = file.read()
+
+            # The working dir for the steps is set to the dirname for the config file
+            dirname = os.path.dirname(self.config_file)
+
+            self._process_config_content(content, dirname)
+
+        # Call _process_config_content, which can determine whether to process as string or dict
+        if self.config_content is not None:
+            logger.debug(f"config: including inline config")
+            self._process_config_content(self.config_content, self.state.workingdir)
+
+        if self.stdin:
+            # Read configuration from stdin
+            logger.debug(f"config: including stdin config")
+            stdin_content = sys.stdin.read()
+            self._process_config_content(stdin_content, self.state.workingdir)
+
+    def _process_config_content(self, content, workingdir):
+        validate(isinstance(content, (str, dict)), "Included configuration must be a string or dictionary")
+        validate(isinstance(workingdir, str), "Invalid workingdir passed to _process_config_content")
+
+        # Don't error on an empty configuration. Just return
+        if content == "":
+            logger.debug("config: empty configuration. Ignoring.")
+            return
+
+        # Parse yaml if it is a string
+        if isinstance(content, str):
+            content = yaml.safe_load(content)
+
+        validate(isinstance(content, dict), "Parsed configuration is not a dictionary")
+
+        # Extract vars from the config
+        # Don't template the vars - These will be templated when processed in a step
+        config_vars = self.state.templater.extract_property(content, "vars", default={}, template=False)
+        validate(isinstance(config_vars, dict), "Config 'vars' is not a dictionary")
+
+        for config_var_name in config_vars:
+            self.state.pipeline.set_var(config_var_name, config_vars[config_var_name])
+
+        # Extract pipeline steps from the config
+        # Don't template the pipeline steps - These will be templated when they are executed
+        config_pipeline = self.state.templater.extract_property(content, "pipeline", default=[], template=False)
+        validate(isinstance(config_pipeline, list), "Config 'pipeline' is not a list")
+
+        for step in config_pipeline:
+            validate(isinstance(step, dict), "Pipeline entry is not a dictionary")
+
+            # Only define the working directory if the step hasn't already defined it
+            if 'workingdir' not in step:
+                step["workingdir"] = workingdir
+
+            self.state.pipeline.add_step(step)
+
+        # Validate config has no other properties
+        validate(len(content.keys()) == 0, f"Found unknown properties in configuration: {content.keys()}")
+
+class HandlerImport(types.Handler):
+    """
+    """
+    def parse(self, step_def):
+        self.import_files = self.state.templater.extract_property(step_def, "files", types=list)
+        validate(isinstance(self.import_files, list), "Step 'files' must be a list of strings")
+        validate(all(isinstance(x, str) for x in self.import_files), "Step 'files' must be a list of strings")
+
+        self.recursive = self.state.templater.extract_property(step_def, "recursive", types=bool)
+        validate(isinstance(self.recursive, bool), "Step 'recursive' must be a bool or bool like string")
+
+    def run(self):
+        filenames = set()
+        for import_file in self.import_files:
+            logger.debug(f"import: processing file glob: {import_file}")
+            matches = glob.glob(import_file, recursive=self.recursive)
+            for match in matches:
+                filenames.add(match)
+
+        # Ensure consistency for load order
+        filenames = list(filenames)
+        filenames.sort()
+
+        new_blocks = []
+        for filename in filenames:
+            logger.debug(f"import: reading file {filename}")
+            with open(filename, "r", encoding="utf-8") as file:
+                content = file.read()
+                new_block = types.TextBlock(content)
+                new_block.meta["import_filename"] = filename
+                self.state.pipeline.add_block(new_block)
+                new_blocks.append(new_block)
+
+        return new_blocks
+
+class HandlerMeta(types.Handler):
+    """
+    """
+    def parse(self, step_def):
+        self.vars = self.state.templater.extract_property(step_def, "vars", types=dict)
+        validate(isinstance(self.vars, dict), "Step 'vars' must be a dictionary of strings")
+        validate(all(isinstance(x, str) for x in self.vars), "Step 'vars' must be a dictionary of strings")
+
+    def run(self):
+        for key in self.vars:
+            block.meta[key] = self.vars[key]
+
+class HandlerReplace(types.Handler):
+    """
+    """
+    def parse(self, step_def):
+        self.replace = self.state.templater.extract_property(step_def, "replace", types=list, default={})
+        validate(isinstance(self.replace, list), "Step 'replace' must be a list")
+        validate(all(isinstance(x, dict) for x in self.replace), "Step 'replace' items must be dictionaries")
+        for item in self.replace:
+            validate('key' in item and isinstance(item['key'], str), "Step 'replace' items must contain a string 'key' property")
+            validate('value' in item and isinstance(item['value'], str), "Step 'replace' items must contain a string 'value' property")
+
+        self.regex = self.state.templater.extract_property(step_def, "regex", types=bool, default=False)
+        validate(isinstance(self.regex, bool), "Step 'regex' must be a bool, bool like string or absent")
+
+    def run(self):
+        for replace_item in self.replace:
+            # Copy the dictionary as we'll change it when removing values
+            replace_item = replace_item.copy()
+
+            replace_key = replace_item['key']
+            replace_value = replace_item['value']
+
+            replace_regex = self.state.templater.extract_property(replace_item, "regex", types=bool, default=False)
+            validate(isinstance(replace_regex, bool), "Replace item 'regex' must be a bool, bool like string or absent")
+
+            logger.debug(f"replace: replacing regex({self.regex or replace_regex}): {replace_key} -> {replace_value}")
+
+            if self.regex or replace_regex:
+                block.text = re.sub(replace_key, replace_value, block.text)
+            else:
+                block.text = block.text.replace(replace_key, replace_value)
+
+class HandlerSplitYaml(types.Handler):
+    """
+    """
+    def parse(self, step_def):
+        self.strip = self.state.templater.extract_property(step_def, "strip", types=bool, default=False)
+        validate(isinstance(self.strip, bool), "Step 'strip' must be a bool or str value")
+
+    def run(self):
+        lines = block.text.splitlines()
+        documents = []
+        current = []
+
+        for line in lines:
+
+            # Determine if we have the beginning of a yaml document
+            if line == "---" and len(current) > 0:
+                documents.append("\n".join(current))
+                current = []
+
+            current.append(line)
+
+        documents.append("\n".join(current))
+
+        # Strip each document, if required
+        if self.strip:
+            documents = [x.strip() for x in documents]
+
+        # If we have a single document and it's the same as the
+        # original block, just exit
+        if len(documents) == 1 and documents[0] == block.text:
+            return
+
+        # Add all documents to the pipeline text block list
+        new_blocks = [types.TextBlock(item) for item in documents]
+        for new_block in new_blocks:
+            new_block.meta = copy.deepcopy(block.meta)
+            new_block.tags = copy.deepcopy(block.tags)
+
+            self.state.pipeline.add_block(new_block)
+
+        # Remove the original source block from the list
+        self.state.pipeline.remove_block(block)
+
+        logger.debug(f"split_yaml: output 1 document -> {len(documents)} documents")
+
+        return new_blocks
+
+class HandlerStdin(types.Handler):
+    """
+    """
+    def parse(self, step_def):
+        self.split = self.state.templater.extract_property(step_def, "split")
+        validate(isinstance(self.split, str) or self.split is None, "Step 'split' must be a string")
+
+        self.strip = self.state.templater.extract_property(step_def, "strip", types=bool, default=False)
+        validate(isinstance(self.strip, bool), "Step 'strip' must be a bool or str value")
+
+    def run(self):
+        # Read content from stdin
+        logger.debug("stdin: reading document from stdin")
+        stdin_content = sys.stdin.read()
+
+        # Split if required and convert to a list of documents
+        if self.split is not None and self.split != "":
+            stdin_items = stdin_content.split(self.split)
+        else:
+            stdin_items = [stdin_content]
+
+        # strip leading and trailing whitespace, if required
+        if self.strip:
+            stdin_items = [x.strip() for x in stdin_items]
+
+        # Add the stdin items to the list of text blocks
+        new_blocks = [types.TextBlock(item) for item in stdin_items]
+        for item in new_blocks:
+            self.state.pipeline.add_block(item)
+
+        return new_blocks
+
+class HandlerStdout(types.Handler):
+    """
+    """
+    def parse(self, step_def):
+        self.prefix = self.state.templater.extract_property(step_def, "prefix")
+        validate(isinstance(self.prefix, str) or self.prefix is None, "Step 'prefix' must be a string")
+
+        self.suffix = self.state.templater.extract_property(step_def, "suffix")
+        validate(isinstance(self.suffix, str) or self.suffix is None, "Step 'suffix' must be a string")
+
+    def run(self):
+        if self.prefix is not None:
+            print(self.prefix)
+
+        print(block.text)
+
+        if self.suffix is not None:
+            print(self.suffix)
+
+class HandlerTemplate(types.Handler):
+    """
+    """
+    def parse(self, step_def):
+        self.vars = self.state.templater.extract_property(step_def, "vars", types=dict)
+        validate(isinstance(self.vars, dict) or self.vars is None, "Step 'vars' must be a dictionary or absent")
+
+    def run(self):
+        template_vars = self.state.vars.copy()
+
+        if self.vars is not None:
+            for key in self.vars:
+                template_vars[key] = self.vars[key]
+
+        block.text = self.state.templater.template_if_string(block.text)
+        if not isinstance(block.text, str):
+            raise PipelineRunException("Could not template source text")
+
+class HandlerSum(types.Handler):
+    """
+    """
+    def parse(self, step_def):
+        pass
+
+    def run(self):
+        _block_sum(block)
+
+        logger.debug(f"sum: document short sum: {block.meta['shortsum']}")
+
+class HandlerJsonPatch(types.Handler):
+    def parse(self, step_def):
+        self.patches = self.state.templater.extract_property(step_def, "patches", types=list)
         validate(isinstance(self.patches, list), "Invalid patch list supplied")
         validate(all(isinstance(x, dict) for x in self.patches), "Invalid patch list supplied")
 
-    def is_per_block():
-        return True
-
-    def run(self, block):
+    def run(self):
         if block is None:
             return
 
@@ -45,24 +333,21 @@ class HandlerJsonPatch(ttast.Handler):
         # Save the yaml format back to the block
         block.text = yaml.dump(manifest, explicit_start=True)
 
-class HandlerMetadata(ttast.Handler):
-    def parse(self):
-        self.name = self.state.templater.extract_property(self.state.step_def, "name")
+class HandlerMetadata(types.Handler):
+    def parse(self, step_def):
+        self.name = self.state.templater.extract_property(step_def, "name")
         validate(isinstance(self.name, str) or self.name is None, "Name is not a string")
 
-        self.namespace = self.state.templater.extract_property(self.state.step_def, "namespace")
+        self.namespace = self.state.templater.extract_property(step_def, "namespace")
         validate(isinstance(self.namespace, str) or self.namespace is None, "Namespace is not a string")
 
-        self.annotations = self.state.templater.extract_property(self.state.step_def, "annotations", types=dict)
+        self.annotations = self.state.templater.extract_property(step_def, "annotations", types=dict)
         validate(isinstance(self.annotations, dict) or self.annotations is None, "Annotations is not a dictionary")
 
-        self.labels = self.state.templater.extract_property(self.state.step_def, "labels", types=dict)
+        self.labels = self.state.templater.extract_property(step_def, "labels", types=dict)
         validate(isinstance(self.labels, dict) or self.labels is None, "Labels is not a dictionary")
 
-    def is_per_block():
-        return True
-
-    def run(self, block):
+    def run(self):
         if block is None:
             return
 
@@ -99,149 +384,3 @@ class HandlerMetadata(ttast.Handler):
                 manifest["metadata"]["labels"][key] = self.labels[key]
 
         block.text = yaml.dump(manifest, explicit_start=True)
-
-class SupportHandlerK8sMetadata(ttast.SupportHandler):
-    def parse(self):
-        self.match_group = self.state.templater.extract_property(self.state.step_def, "match_group")
-        validate(isinstance(self.match_group, str) or self.match_group is None, "Invalid match_group value")
-
-        self.match_version = self.state.templater.extract_property(self.state.step_def, "match_version")
-        validate(isinstance(self.match_version, str) or self.match_version is None, "Invalid match_version value")
-
-        self.match_kind = self.state.templater.extract_property(self.state.step_def, "match_kind")
-        validate(isinstance(self.match_kind, str) or self.match_kind is None, "Invalid match_kind value")
-
-        self.match_namespace = self.state.templater.extract_property(self.state.step_def, "match_namespace")
-        validate(isinstance(self.match_namespace, str) or self.match_namespace is None, "Invalid match_namespace value")
-
-        self.match_name = self.state.templater.extract_property(self.state.step_def, "match_name")
-        validate(isinstance(self.match_name, str) or self.match_name is None, "Invalid match_name value")
-
-    def pre(self, block):
-        if block is None:
-            return
-
-        # Best effort extract of Group, Version, Kind, Name from the object, if
-        # it is yaml
-
-        manifest = None
-        try:
-            manifest = yaml.safe_load(block.text)
-            if not isinstance(manifest, dict):
-                logger.debug(f"ExtractMetadata: Parsed yaml is not a dictionary")
-                manifest = None
-        except yaml.YAMLError as exc:
-            logger.debug(f"ExtractMetadata: Could not parse input object: {exc}")
-
-        api_version = ""
-        group = ""
-        version = ""
-        kind = ""
-        namespace = ""
-        name = ""
-
-        if manifest is not None:
-            # api version
-            api_version = manifest.get("apiVersion", "")
-
-            # group and version
-            if api_version != "":
-                split = api_version.split("/")
-
-                if len(split) == 1:
-                    version = split[0]
-                elif len(split) == 2:
-                    group = split[0]
-                    version = split[1]
-
-            # Kind
-            kind = manifest.get("kind", "")
-
-            # Name and Namespace
-            metadata = manifest.get("metadata")
-            if isinstance(metadata, dict):
-                name = metadata.get("name", "")
-                namespace = metadata.get("namespace", "")
-
-            # Save the parsed manifest back to the block to normalise the yaml format
-            block.text = yaml.dump(manifest)
-
-        block.meta["k8s_group"] = group
-        block.meta["k8s_version"] = version
-        block.meta["k8s_kind"] = kind
-        block.meta["k8s_namespace"] = namespace
-        block.meta["k8s_name"] = name
-        block.meta["k8s_api_version"] = api_version
-        block.meta["k8s_manifest"] = manifest
-
-        # k8s group match
-        if self.match_group is not None and not re.search(self.match_group, block.meta["k8s_group"]):
-            return []
-
-        # k8s version match
-        if self.match_version is not None and not re.search(self.match_version, block.meta["k8s_version"]):
-            return []
-
-        # k8s kind match
-        if self.match_kind is not None and not re.search(self.match_kind, block.meta["k8s_kind"]):
-            return []
-
-        # k8s namespace match
-        if self.match_namespace is not None and not re.search(self.match_namespace, block.meta["k8s_namespace"]):
-            return []
-
-        # k8s name match
-        if self.match_name is not None and not re.search(self.match_name, block.meta["k8s_name"]):
-            return []
-
-    def post(self, block):
-        pass
-
-class SupportHandlerSplitYaml(ttast.SupportHandler):
-    def parse(self):
-        pass
-
-    def pre(self, block):
-        pass
-
-    def post(self, block):
-        if block is None:
-            return
-
-        lines = block.text.splitlines()
-        documents = []
-        current = []
-
-        for line in lines:
-
-            # Determine if we have the beginning of a yaml document
-            if line == "---" and len(current) > 0:
-                documents.append("\n".join(current))
-                current = []
-
-            current.append(line)
-
-        documents.append("\n".join(current))
-
-        # Strip each document
-        documents = [x.strip() for x in documents]
-
-        # If we have a single document and it's the same as the
-        # original block, just exit
-        if len(documents) == 1 and documents[0] == block.text:
-            return
-
-        # Add all documents to the pipeline text block list
-        new_blocks = [ttast.TextBlock(item) for item in documents]
-        for new_block in new_blocks:
-            new_block.meta = copy.deepcopy(block.meta)
-            new_block.tags = copy.deepcopy(block.tags)
-
-            self.state.pipeline.add_block(new_block)
-
-        # Remove the original source block from the list
-        self.state.pipeline.remove_block(block)
-
-        logger.debug(f"split_yaml: output 1 document -> {len(documents)} documents")
-
-        return new_blocks
