@@ -21,7 +21,7 @@ class HandlerPipeline(types.Handler):
         # Path to other pipeline
         self.path = self.state.spec_util.extract_property(step_def, "path")
 
-        self.vars = self.state.spec_util.extract_property(step_def, "vars")
+        self.vars = self.state.spec_util.extract_property(step_def, "vars", default={})
 
         self.pass_blocks = self.state.spec_util.extract_property(step_def, "pass_blocks", default=False)
 
@@ -74,7 +74,7 @@ class HandlerImport(types.Handler):
     def extract(self, step_def):
         self.import_files = self.state.spec_util.extract_property(step_def, "files")
 
-        self.recursive = self.state.spec_util.extract_property(step_def, "recursive")
+        self.recursive = self.state.spec_util.extract_property(step_def, "recursive", default=False)
 
     def run(self):
         spec_util = self.state.spec_util
@@ -110,12 +110,12 @@ class HandlerVars(types.Handler):
     """
     """
     def extract(self, step_def):
-        self.pipeline_vars = self.state.spec_util.extract_property(step_def, "pipeline")
+        self.pipeline_vars = self.state.spec_util.extract_property(step_def, "pipeline", default={})
 
-        self.block_vars = self.state.spec_util.extract_property(step_def, "block")
+        self.block_vars = self.state.spec_util.extract_property(step_def, "block", default={})
 
     def run(self):
-        working_blocks = self.state.working_blocks
+        working_blocks = self.state.working_blocks.copy()
         spec_util = self.state.spec_util
 
         pipeline_vars = spec_util.resolve(self.pipeline_vars, (dict, type(None)))
@@ -136,12 +136,12 @@ class HandlerReplace(types.Handler):
     """
     """
     def extract(self, step_def):
-        self.items = self.state.spec_util.extract_property(step_def, "items", default={})
+        self.items = self.state.spec_util.extract_property(step_def, "items")
 
         self.regex = self.state.spec_util.extract_property(step_def, "regex", default=False)
 
     def run(self):
-        working_blocks = self.state.working_blocks
+        working_blocks = self.state.working_blocks.copy()
         spec_util = self.state.spec_util
 
         regex = spec_util.resolve(self.regex, bool)
@@ -177,7 +177,7 @@ class HandlerSplitYaml(types.Handler):
         self.strip = self.state.spec_util.extract_property(step_def, "strip", default=False)
 
     def run(self):
-        working_blocks = self.state.working_blocks
+        working_blocks = self.state.working_blocks.copy()
 
         for block in working_blocks:
             block_vars = block.create_scoped_vars(self.state.vars)
@@ -263,7 +263,7 @@ class HandlerStdout(types.Handler):
         self.suffix = self.state.spec_util.extract_property(step_def, "suffix")
 
     def run(self):
-        working_blocks = self.state.working_blocks
+        working_blocks = self.state.working_blocks.copy()
 
         for block in working_blocks:
             block_vars = block.create_scoped_vars(self.state.vars)
@@ -283,10 +283,10 @@ class HandlerTemplate(types.Handler):
     """
     """
     def extract(self, step_def):
-        self.vars = self.state.spec_util.extract_property(step_def, "vars")
+        self.vars = self.state.spec_util.extract_property(step_def, "vars", default={})
 
     def run(self):
-        working_blocks = self.state.working_blocks
+        working_blocks = self.state.working_blocks.copy()
 
         for block in working_blocks:
             block_vars = block.create_scoped_vars(self.state.vars)
@@ -318,7 +318,7 @@ class HandlerJsonPatch(types.Handler):
         self.patches = self.state.spec_util.extract_property(step_def, "patches")
 
     def run(self):
-        working_blocks = self.state.working_blocks
+        working_blocks = self.state.working_blocks.copy()
 
         for block in working_blocks:
             block_vars = block.create_scoped_vars(self.state.vars)
@@ -353,7 +353,7 @@ class HandlerMetadata(types.Handler):
         self.labels = self.state.spec_util.extract_property(step_def, "labels")
 
     def run(self):
-        working_blocks = self.state.working_blocks
+        working_blocks = self.state.working_blocks.copy()
 
         for block in working_blocks:
             block_vars = block.create_scoped_vars(self.state.vars)

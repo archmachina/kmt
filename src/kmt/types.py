@@ -241,7 +241,7 @@ class Pipeline:
                 raise PipelineRunException("Missing step type on the step definition")
             
             if len(step_outer.keys()) > 1:
-                raise PipelineRunException("Multiple keys remaining on the step definition - cannot determine type")
+                raise PipelineRunException(f"Multiple keys remaining on the step definition - cannot determine type: {step_outer.keys()}")
 
             # Extract the step type
             step_type = [x for x in step_outer][0]

@@ -29,7 +29,7 @@ class SupportHandlerWhen(types.SupportHandler):
         self.when = self.state.spec_util.extract_property(step_def, "when", default=[])
 
     def pre(self):
-        working_blocks = self.state.working_blocks
+        working_blocks = self.state.working_blocks.copy()
 
         for block in working_blocks:
             block_vars = block.create_scoped_vars(self.state.vars)
@@ -63,7 +63,7 @@ class SupportHandlerTags(types.SupportHandler):
         self.apply_tags = self.state.spec_util.extract_property(step_def, "apply_tags", default=[])
 
     def pre(self):
-        working_blocks = self.state.working_blocks
+        working_blocks = self.state.working_blocks.copy()
 
         for block in working_blocks:
             block_vars = block.create_scoped_vars(self.state.vars)
@@ -105,7 +105,7 @@ class SupportHandlerTags(types.SupportHandler):
             for tag in apply_tags:
                 block.tags.add(spec_util.resolve(tag, str))
 
-class SupportHandlerK8sMetadata(types.SupportHandler):
+class SupportHandlerMetadata(types.SupportHandler):
     def extract(self, step_def):
         self.match_group = self.state.spec_util.extract_property(step_def, "match_group")
 
@@ -118,7 +118,7 @@ class SupportHandlerK8sMetadata(types.SupportHandler):
         self.match_name = self.state.spec_util.extract_property(step_def, "match_name")
 
     def pre(self):
-        working_blocks = self.state.working_blocks
+        working_blocks = self.state.working_blocks.copy()
 
         for block in working_blocks:
             block_vars = block.create_scoped_vars(self.state.vars)
@@ -167,7 +167,7 @@ class SupportHandlerK8sMetadata(types.SupportHandler):
                     namespace = metadata.get("namespace", "")
 
                 # Save the parsed manifest back to the block to normalise the yaml format
-                block.text = yaml.dump(manifest)
+                block.text = yaml.dump(manifest, explicit_start=True)
 
             block.vars["metadata_group"] = group
             block.vars["metadata_version"] = version
@@ -218,7 +218,7 @@ class SupportHandlerSplitYaml(types.SupportHandler):
         pass
 
     def post(self):
-        working_blocks = self.state.working_blocks
+        working_blocks = self.state.working_blocks.copy()
 
         for block in working_blocks:
             block_vars = block.create_scoped_vars(self.state.vars)
@@ -267,6 +267,6 @@ class SupportHandlerSplitYaml(types.SupportHandler):
 
 # types.default_support_handlers.append(SupportHandlerSum)
 types.default_support_handlers.append(SupportHandlerSplitYaml)
+types.default_support_handlers.append(SupportHandlerMetadata)
 types.default_support_handlers.append(SupportHandlerTags)
 types.default_support_handlers.append(SupportHandlerWhen)
-types.default_support_handlers.append(SupportHandlerK8sMetadata)
