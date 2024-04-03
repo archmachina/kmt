@@ -5,7 +5,7 @@ import inspect
 import copy
 import logging
 
-from .util import validate, parse_bool
+from . import util
 from .exception import PipelineRunException
 
 logger = logging.getLogger(__name__)
@@ -26,15 +26,15 @@ yaml.add_representer(str, str_representer)
 
 class TextBlock:
     def __init__(self, text):
-        validate(isinstance(text, str), "Invalid text passed to TextBlock init")
+        util.validate(isinstance(text, str), "Invalid text passed to TextBlock init")
 
         self.text = text
 
         self.tags = set()
         self.vars = {}
-    
+
     def create_scoped_vars(self, base_vars=None):
-        validate(isinstance(vars, dict), "Invalid vars passed to TextBlock create_vars")
+        util.validate(isinstance(base_vars, dict), "Invalid base_vars passed to TextBlock create_vars")
 
         if base_vars is None:
             base_vars = {}
@@ -46,6 +46,8 @@ class TextBlock:
         for key in self.vars:
             new_vars[key] = self.vars[key]
 
+        return new_vars
+
 class Common:
     def __init__(self):
         self.environment = jinja2.Environment()
@@ -55,32 +57,32 @@ class Common:
             self.environment.filters[filter_name] = default_filters[filter_name]
 
     def add_handlers(self, handlers):
-        validate(isinstance(handlers, dict), "Invalid handlers passed to add_handlers")
-        validate((all(x is None or (inspect.isclass(x) and issubclass(x, Handler))) for x in handlers.values()), "Invalid handlers passed to add_handlers")
+        util.validate(isinstance(handlers, dict), "Invalid handlers passed to add_handlers")
+        util.validate((all(x is None or (inspect.isclass(x) and issubclass(x, Handler))) for x in handlers.values()), "Invalid handlers passed to add_handlers")
 
         for key in handlers:
             self.handlers[key] = handlers[key]
 
     def add_support_handlers(self, handlers):
-        validate(isinstance(handlers, list), "Invalid handlers passed to add_support_handlers")
-        validate((all(inspect.isclass(x) and issubclass(x, SupportHandler)) for x in handlers), "Invalid handlers passed to add_support_handlers")
+        util.validate(isinstance(handlers, list), "Invalid handlers passed to add_support_handlers")
+        util.validate((all(inspect.isclass(x) and issubclass(x, SupportHandler)) for x in handlers), "Invalid handlers passed to add_support_handlers")
 
         for handler in handlers:
             if handler not in self.support_handlers:
                 self.support_handlers.append(handler)
 
     def add_filters(self, filters):
-        validate(isinstance(filters, dict), "Invalid filters passed to add_filters")
-        validate(all((callable(x) or x is None) for x in filters.values()), "Invalid filters passed to add_filters")
+        util.validate(isinstance(filters, dict), "Invalid filters passed to add_filters")
+        util.validate(all((callable(x) or x is None) for x in filters.values()), "Invalid filters passed to add_filters")
 
         for key in filters:
             self.environment.filters[key] = filters[key]
 
 class PipelineStepState:
     def __init__(self, pipeline, step_vars, working_blocks):
-        validate(isinstance(pipeline, Pipeline) or pipeline is None, "Invalid pipeline passed to PipelineStepState")
-        validate(isinstance(step_vars, dict), "Invalid step vars passed to PipelineStepState")
-        validate(isinstance(working_blocks, list) and all(isinstance(x, TextBlock) for x in working_blocks),
+        util.validate(isinstance(pipeline, Pipeline) or pipeline is None, "Invalid pipeline passed to PipelineStepState")
+        util.validate(isinstance(step_vars, dict), "Invalid step vars passed to PipelineStepState")
+        util.validate(isinstance(working_blocks, list) and all(isinstance(x, TextBlock) for x in working_blocks),
             "Invalid working blocks passed to PipelineStepState")
 
         self.pipeline = pipeline
@@ -90,7 +92,7 @@ class PipelineStepState:
 
 class SupportHandler:
     def init(self, state):
-        validate(isinstance(state, PipelineStepState), "Invalid step state passed to SupportHandler")
+        util.validate(isinstance(state, PipelineStepState), "Invalid step state passed to SupportHandler")
 
         self.state = state
 
@@ -105,7 +107,7 @@ class SupportHandler:
 
 class Handler:
     def init(self, state):
-        validate(isinstance(state, PipelineStepState), "Invalid step state passed to Handler")
+        util.validate(isinstance(state, PipelineStepState), "Invalid step state passed to Handler")
 
         self.state = state
 
@@ -127,11 +129,11 @@ class Pipeline:
         if common is None:
             common = Common()
 
-        validate(isinstance(configdir, str) and configdir != "", "Invalid configdir passed to Pipeline init")
-        validate(isinstance(pipeline_vars, dict), "Invalid pipeline_vars passed to Pipeline init")
-        validate(isinstance(blocks, list) and all(isinstance(x, TextBlock) for x in blocks),
+        util.validate(isinstance(configdir, str) and configdir != "", "Invalid configdir passed to Pipeline init")
+        util.validate(isinstance(pipeline_vars, dict), "Invalid pipeline_vars passed to Pipeline init")
+        util.validate(isinstance(blocks, list) and all(isinstance(x, TextBlock) for x in blocks),
             "Invalid blocks passed to Pipeline init")
-        validate(isinstance(common, Common), "Invalid common object passed to Pipeline init")
+        util.validate(isinstance(common, Common), "Invalid common object passed to Pipeline init")
 
         self.common = common
         self._input_blocks = blocks
@@ -143,6 +145,7 @@ class Pipeline:
         #
 
         # Open config file from configdir
+        configdir = os.path.realpath(configdir)
         logger.debug(f"Processing pipeline for directory: {configdir}")
         if not os.path.isdir(configdir):
             raise PipelineRunException(f"Config dir {configdir} is not a directory")
@@ -169,25 +172,25 @@ class Pipeline:
         # Don't template the vars - These will be templated when processed in a step
         config_defaults = spec_util.extract_property(pipeline_spec, "defaults", default={})
         config_defaults = spec_util.resolve(config_defaults, dict, template=False)
-        validate(isinstance(config_defaults, dict), "Config 'defaults' is not a dictionary")
+        util.validate(isinstance(config_defaults, dict), "Config 'defaults' is not a dictionary")
 
         # Config vars - vars that can't be overridden
         # Don't template the vars - These will be templated when processed in a step
         config_vars = spec_util.extract_property(pipeline_spec, "vars", default={})
         config_vars = spec_util.resolve(config_vars, dict, template=False)
-        validate(isinstance(config_vars, dict), "Config 'vars' is not a dictionary")
+        util.validate(isinstance(config_vars, dict), "Config 'vars' is not a dictionary")
 
         # Pipeline - list of the steps to run for this pipeline
         # Don't template the pipeline steps - These will be templated when they are executed
         config_pipeline = spec_util.extract_property(pipeline_spec, "pipeline", default=[])
         config_pipeline = spec_util.resolve(config_pipeline, list, template=False)
-        validate(isinstance(config_pipeline, list), "Config 'pipeline' is not a list")
+        util.validate(isinstance(config_pipeline, list), "Config 'pipeline' is not a list")
         self.pipeline_steps = config_pipeline
 
         # Accept blocks - whether to include incoming blocks in pipeline processing
         accept_blocks = spec_util.extract_property(pipeline_spec, "accept_blocks", default=False)
         accept_blocks = spec_util.resolve(accept_blocks, bool)
-        validate(isinstance(accept_blocks, bool), "Invalid type for accept_blocks")
+        util.validate(isinstance(accept_blocks, bool), "Invalid type for accept_blocks")
 
         # If accept_blocks is true, we'll apply the pipeline steps to the incoming blocks as well
         if accept_blocks:
@@ -195,7 +198,7 @@ class Pipeline:
             self._input_blocks = []
 
         # Make sure there are no other properties left on the pipeline spec
-        validate(len(pipeline_spec.keys()) == 0, f"Unknown properties on pipeline specification: {pipeline_spec.keys()}")
+        util.validate(len(pipeline_spec.keys()) == 0, f"Unknown properties on pipeline specification: {pipeline_spec.keys()}")
 
         #
         # Merge variables in to the pipeline variables in order
@@ -250,9 +253,9 @@ class Pipeline:
             # Extract the step config and allow it to be templated with vars defined up to this
             # point
             spec_util = SpecUtil(self.common.environment, state.vars)
-            step_inner = spec_util.extract_property(step_outer, step_type, types=dict, default={})
+            step_inner = spec_util.extract_property(step_outer, step_type, default={})
             step_inner = spec_util.resolve(step_inner, dict)
-            validate(isinstance(step_inner, dict), "Invalid value for step inner configuration")
+            util.validate(isinstance(step_inner, dict), "Invalid value for step inner configuration")
 
             # Create the handler object to process the handler config
             if step_type not in self.common.handlers:
@@ -283,10 +286,12 @@ class Pipeline:
                 os.chdir(self.configdir)
                 support_handler.post()
 
+        return self.blocks + self._input_blocks
+
 class SpecUtil:
     def __init__(self, environment, template_vars):
-        validate(isinstance(environment, jinja2.Environment), "Invalid environment passed to SpecUtil ctor")
-        validate(isinstance(template_vars, dict), "Invalid template vars passed to SpecUtil")
+        util.validate(isinstance(environment, jinja2.Environment), "Invalid environment passed to SpecUtil ctor")
+        util.validate(isinstance(template_vars, dict), "Invalid template vars passed to SpecUtil")
 
         self._environment = environment
 
@@ -296,6 +301,7 @@ class SpecUtil:
         self.vars = template_vars
 
     def new_scope(self, new_vars):
+        util.validate(isinstance(new_vars, dict), "Invalid new_vars passed to new_scope")
 
         # Create a new set of vars
         working_vars = self.vars.copy()
@@ -376,7 +382,7 @@ class SpecUtil:
         if isinstance(types, type):
             types = (types,)
 
-        validate(isinstance(types, tuple) and all(isinstance(x, type) for x in types),
+        util.validate(isinstance(types, tuple) and all(isinstance(x, type) for x in types),
             "Invalid types passed to coerce_value")
 
         parsed = None
@@ -414,7 +420,7 @@ class SpecUtil:
         raise PipelineRunException(f"Could not convert value to target types: {types}")
 
     def resolve(self, value, types, /, template=True, recursive=False, var_override=None):
-        validate(isinstance(template, bool), "Invalid value for template passed to resolve")
+        util.validate(isinstance(template, bool), "Invalid value for template passed to resolve")
 
         # Template the value, if it is a string
         if template:

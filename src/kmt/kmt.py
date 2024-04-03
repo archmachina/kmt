@@ -27,9 +27,7 @@ def process_args() -> int:
     )
 
     # Parser configuration
-    parser.add_argument(
-        "-c", action="store", dest="configdir", help="Configuration directory"
-    )
+    parser.add_argument("path", help="Pipeline directory path")
 
     parser.add_argument(
         "-d", action="store_true", dest="debug", help="Enable debug output"
@@ -39,7 +37,7 @@ def process_args() -> int:
 
     # Capture argument options
     debug = args.debug
-    configdir = args.configdir
+    path = args.path
 
     # Logging configuration
     level = logging.WARNING
@@ -49,10 +47,13 @@ def process_args() -> int:
     logging.basicConfig(level=level, format="%(levelname)s: %(message)s")
 
     try:
-        pipeline = types.Pipeline(configdir)
+        pipeline = types.Pipeline(path)
 
         # Start executing the pipeline
-        pipeline.run()
+        blocks = pipeline.run()
+
+        for block in blocks:
+            print(block.text)
 
     except Exception as e:  # pylint: disable=broad-exception-caught
         if debug:
@@ -78,7 +79,6 @@ def main():
         logging.getLogger(__name__).exception(e)
         sys.stdout.flush()
         sys.exit(1)
-
 
 if __name__ == "__main__":
     main()

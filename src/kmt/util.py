@@ -1,20 +1,19 @@
 
-import jinja2
 import logging
 import hashlib
 import textwrap
 
-from .exception import *
+from . import exception
 from . import types
 
 logger = logging.getLogger(__name__)
 
-def validate(val, message, extype=ValidationException):
+def validate(val, message, extype=exception.ValidationException):
     if not val:
         raise extype(message)
 
 def block_sum(block):
-    validate(isinstance(block, types.TextBlock), "Invalid text block passed to _block_sum")
+    validate(isinstance(block, types.TextBlock), "Invalid text block passed to block_sum")
 
     md5 = hashlib.md5()
     sha1 = hashlib.sha1()

@@ -3,8 +3,6 @@ import copy
 import yaml
 import re
 
-
-from .util import validate
 from . import util
 from . import types
 
