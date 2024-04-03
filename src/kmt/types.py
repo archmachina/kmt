@@ -41,7 +41,7 @@ class TextBlock:
 
         new_vars = base_vars.copy()
 
-        new_vars["tags"] = self.tags
+        new_vars["tags"] = list(self.tags)
 
         for key in self.vars:
             new_vars[key] = self.vars[key]
@@ -271,18 +271,23 @@ class Pipeline:
 
             # Run pre for any support handlers
             logger.debug("Running pre support handlers")
+            logger.debug(f"Pipeline blocks: {len(self.blocks)}. Working blocks: {len(state.working_blocks)}")
             for support_handler in support_handlers:
+                logger.debug(f"Calling support handler pre: {support_handler}")
                 os.chdir(self.configdir)
                 support_handler.pre()
 
             # Run the main handler
-            logger.debug("Running handler")
+            logger.debug(f"Pipeline blocks: {len(self.blocks)}. Working blocks: {len(state.working_blocks)}")
+            logger.debug(f"Calling handler: {handler}")
             os.chdir(self.configdir)
             handler.run()
 
             # Run post for any support handlers
             logger.debug("Running post support handlers")
+            logger.debug(f"Pipeline blocks: {len(self.blocks)}. Working blocks: {len(state.working_blocks)}")
             for support_handler in support_handlers:
+                logger.debug(f"Calling support handler post: {support_handler}")
                 os.chdir(self.configdir)
                 support_handler.post()
 

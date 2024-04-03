@@ -52,6 +52,7 @@ def process_args() -> int:
         # Start executing the pipeline
         blocks = pipeline.run()
 
+        logger.debug(f"Received {len(blocks)} blocks from the pipeline")
         for block in blocks:
             print(block.text)
 

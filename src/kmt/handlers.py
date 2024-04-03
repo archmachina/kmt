@@ -158,7 +158,7 @@ class HandlerReplace(types.Handler):
                 replace_key = spec_util.resolve(replace_key, str)
 
                 replace_value = spec_util.extract_property(replace_item, "value")
-                replace_value = spec_util.resolve(replace_key, str)
+                replace_value = spec_util.resolve(replace_value, str)
 
                 replace_regex = spec_util.extract_property(replace_item, "regex", default=False)
                 replace_regex = spec_util.resolve(replace_regex, bool)
@@ -385,7 +385,7 @@ class HandlerMetadata(types.Handler):
                     manifest["metadata"]["annotations"] = {}
 
                 for key in annotations:
-                    manifest["metadata"]["annotations"][key] = spec_util.resovle(annotations[key], str)
+                    manifest["metadata"]["annotations"][key] = spec_util.resolve(annotations[key], str)
 
             labels = spec_util.resolve(self.labels, (dict, type(None)))
             if labels is not None:
