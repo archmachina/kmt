@@ -9,9 +9,9 @@ from . import types
 
 logger = logging.getLogger(__name__)
 
-def validate(val, message):
+def validate(val, message, extype=ValidationException):
     if not val:
-        raise ValidationException(message)
+        raise extype(message)
 
 def block_sum(block):
     validate(isinstance(block, types.TextBlock), "Invalid text block passed to _block_sum")
@@ -25,13 +25,13 @@ def block_sum(block):
     sha1.update(encode)
     sha256.update(encode)
 
-    block.meta["md5sum"] = md5.hexdigest()
-    block.meta["sha1sum"] = sha1.hexdigest()
-    block.meta["sha256sum"] = sha256.hexdigest()
+    block.vars["md5sum"] = md5.hexdigest()
+    block.vars["sha1sum"] = sha1.hexdigest()
+    block.vars["sha256sum"] = sha256.hexdigest()
 
     short = 0
     short_wrap = textwrap.wrap(sha256.hexdigest(), 8)
     for item in short_wrap:
         short = short ^ int(item, 16)
 
-    block.meta["shortsum"] = format(short, 'x')
+    block.vars["shortsum"] = format(short, 'x')

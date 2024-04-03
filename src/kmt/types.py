@@ -31,7 +31,20 @@ class TextBlock:
         self.text = text
 
         self.tags = set()
-        self.meta = {}
+        self.vars = {}
+    
+    def create_scoped_vars(self, base_vars=None):
+        validate(isinstance(vars, dict), "Invalid vars passed to TextBlock create_vars")
+
+        if base_vars is None:
+            base_vars = {}
+
+        new_vars = base_vars.copy()
+
+        new_vars["tags"] = self.tags
+
+        for key in self.vars:
+            new_vars[key] = self.vars[key]
 
 class Common:
     def __init__(self):
@@ -73,6 +86,7 @@ class PipelineStepState:
         self.pipeline = pipeline
         self.vars = step_vars
         self.working_blocks = working_blocks
+        self.spec_util = SpecUtil(self.pipeline.common.environment, self.vars)
 
 class SupportHandler:
     def init(self, state):
@@ -80,7 +94,7 @@ class SupportHandler:
 
         self.state = state
 
-    def parse(self, step):
+    def extract(self, step):
         raise PipelineRunException("parse undefined in SupportHandler")
 
     def pre(self):
@@ -95,7 +109,7 @@ class Handler:
 
         self.state = state
 
-    def parse(self, step):
+    def extract(self, step):
         raise PipelineRunException("parse undefined in Handler")
 
     def run(self):
@@ -121,7 +135,7 @@ class Pipeline:
 
         self.common = common
         self._input_blocks = blocks
-        self._blocks = []
+        self.blocks = []
         self._vars = {}
 
         #
@@ -153,28 +167,31 @@ class Pipeline:
 
         # Config defaults - vars that can be overridden by the supplied vars
         # Don't template the vars - These will be templated when processed in a step
-        config_defaults = spec_util.extract_property(pipeline_spec, "defaults", default={}, template=False)
+        config_defaults = spec_util.extract_property(pipeline_spec, "defaults", default={})
+        config_defaults = spec_util.resolve(config_defaults, dict, template=False)
         validate(isinstance(config_defaults, dict), "Config 'defaults' is not a dictionary")
 
         # Config vars - vars that can't be overridden
         # Don't template the vars - These will be templated when processed in a step
-        config_vars = spec_util.extract_property(pipeline_spec, "vars", default={}, template=False)
+        config_vars = spec_util.extract_property(pipeline_spec, "vars", default={})
+        config_vars = spec_util.resolve(config_vars, dict, template=False)
         validate(isinstance(config_vars, dict), "Config 'vars' is not a dictionary")
 
         # Pipeline - list of the steps to run for this pipeline
         # Don't template the pipeline steps - These will be templated when they are executed
-        config_pipeline = spec_util.extract_property(pipeline_spec, "pipeline", default=[], template=False)
+        config_pipeline = spec_util.extract_property(pipeline_spec, "pipeline", default=[])
+        config_pipeline = spec_util.resolve(config_pipeline, list, template=False)
         validate(isinstance(config_pipeline, list), "Config 'pipeline' is not a list")
         self.pipeline_steps = config_pipeline
 
         # Accept blocks - whether to include incoming blocks in pipeline processing
-        accept_blocks = spec_util.extract_property(pipeline_spec, "accept_blocks", default=False,
-            type=bool, template=False)
+        accept_blocks = spec_util.extract_property(pipeline_spec, "accept_blocks", default=False)
+        accept_blocks = spec_util.resolve(accept_blocks, bool)
         validate(isinstance(accept_blocks, bool), "Invalid type for accept_blocks")
 
         # If accept_blocks is true, we'll apply the pipeline steps to the incoming blocks as well
         if accept_blocks:
-            self._blocks = self._input_blocks
+            self.blocks = self._input_blocks
             self._input_blocks = []
 
         # Make sure there are no other properties left on the pipeline spec
@@ -206,15 +223,15 @@ class Pipeline:
             step_vars["env"] = os.environ.copy()
 
             state = PipelineStepState(pipeline=self, step_vars=step_vars,
-                working_blocks=self._blocks.copy())
+                working_blocks=self.blocks.copy())
 
             # Initialise each support handler based on the step definition
             # This is the outer step definition, not the arguments to the handler
             support_handlers = [x() for x in self.common.support_handlers]
             for support in support_handlers:
                 support.init(state)
-                support.parse(step_outer)
-            
+                support.extract(step_outer)
+
             # Once the support handlers have initialised, there should be a single
             # key representing the handler type
             if len(step_outer.keys()) < 1:
@@ -234,6 +251,8 @@ class Pipeline:
             # point
             spec_util = SpecUtil(self.common.environment, state.vars)
             step_inner = spec_util.extract_property(step_outer, step_type, types=dict, default={})
+            step_inner = spec_util.resolve(step_inner, dict)
+            validate(isinstance(step_inner, dict), "Invalid value for step inner configuration")
 
             # Create the handler object to process the handler config
             if step_type not in self.common.handlers:
@@ -241,7 +260,7 @@ class Pipeline:
             
             handler = self.common.handlers[step_type]()
             handler.init(state)
-            handler.parse(step_inner)
+            handler.extract(step_inner)
 
             # Make sure there are no remaining properties that the handler wasn't looking for
             if len(step_inner.keys()) > 0:
@@ -276,6 +295,17 @@ class SpecUtil:
         # and shouldn't need to be reimported or altered within the SpecUtil
         self.vars = template_vars
 
+    def new_scope(self, new_vars):
+
+        # Create a new set of vars
+        working_vars = self.vars.copy()
+        for key in new_vars:
+            working_vars[key] = new_vars[key]
+
+        new_spec_util = SpecUtil(self._environment, working_vars)
+
+        return new_spec_util
+
     def template_if_string(self, val, var_override=None):
         if var_override is not None and not isinstance(var_override, dict):
             raise PipelineRunException("Invalid var override passed to template_if_string")
@@ -285,31 +315,28 @@ class SpecUtil:
         if var_override is not None:
             template_vars = var_override
 
-        if isinstance(val, str):
-            # Perform at most 'count' passes of the string
-            count = 30
-            current = val
+        if not isinstance(val, str):
+            return val
+        
+        # Perform at most 'count' passes of the string
+        count = 30
+        current = val
 
-            while count > 0:
-                count = count - 1
+        while count > 0:
+            count = count - 1
 
-                template = self._environment.from_string(current)
-                output = template.render(template_vars)
-                if output == current:
-                    return output
+            template = self._environment.from_string(current)
+            output = template.render(template_vars)
+            if output == current:
+                return output
 
-                current = output
+            current = output
 
-            raise PipelineRunException(f"Reached recursion limit for string template '{val}'")
+        raise PipelineRunException(f"Reached recursion limit for string template '{val}'")
 
-        return val
-
-    def extract_property(self, spec, key, /, types=None, default=None, required=False, var_override=None, template=True):
+    def extract_property(self, spec, key, /, default=None, required=False):
         if not isinstance(spec, dict):
             raise PipelineRunException("Invalid spec passed to extract_property. Must be dict")
-
-        if var_override is not None and not isinstance(var_override, dict):
-            raise PipelineRunException("Invalid var_override passed to extract_property")
 
         if key not in spec:
             # Raise exception is the key isn't present, but required
@@ -321,12 +348,6 @@ class SpecUtil:
 
         # Retrieve value
         val = spec.pop(key)
-
-        # Recursive template of the object and sub elements, if it is a dict or list
-        if template:
-            val = self.recursive_template(val, var_override=var_override)
-
-        val = self.coerce_property(types, val)
 
         return val
 
@@ -347,7 +368,7 @@ class SpecUtil:
 
         raise PipelineRunException(f"Unparseable value ({obj}) passed to parse_bool")
 
-    def coerce_property(self, types, val):
+    def coerce_value(self, types, val):
         if types is None:
             # Nothing to do here
             return val
@@ -355,13 +376,8 @@ class SpecUtil:
         if isinstance(types, type):
             types = (types,)
 
-        if not isinstance(types, tuple) and all(isinstance(x, type) for x in types):
-            raise PipelineRunException("Invalid types passed to coerce_property")
-
-        # Don't bother with conversion if val is None. Also, conversion to str will just give 'None'
-        # which is probably not what is wanted
-        if val is None:
-            return None
+        validate(isinstance(types, tuple) and all(isinstance(x, type) for x in types),
+            "Invalid types passed to coerce_value")
 
         parsed = None
 
@@ -377,6 +393,10 @@ class SpecUtil:
                 except:
                     pass
             elif type_item == str:
+                if val is None:
+                    # Don't convert None to string. This is likely not wanted.
+                    continue
+
                 return str(val)
 
             # None of the above have worked, try parsing as yaml to see if it
@@ -391,19 +411,39 @@ class SpecUtil:
                 except yaml.YAMLError as e:
                     pass
 
-        return val
+        raise PipelineRunException(f"Could not convert value to target types: {types}")
+
+    def resolve(self, value, types, /, template=True, recursive=False, var_override=None):
+        validate(isinstance(template, bool), "Invalid value for template passed to resolve")
+
+        # Template the value, if it is a string
+        if template:
+            if recursive:
+                value = self.recursive_template(value, var_override=var_override)
+            else:
+                value = self.template_if_string(value, var_override=var_override)
+
+        value = self.coerce_value(types, value)
+
+        return value
 
     def recursive_template(self, item, var_override=None):
 
-        # Only perform recursive templating if the input object
-        # is a dictionary or list
+        # Potentially convert a string to a dict or list type
+        item = self.template_if_string(item, var_override=var_override)
+
+        # If the item is still not a dict or list, just return it
+        # This may still have converted the item (e.g. string -> bool)
         if not isinstance(item, (dict, list)):
-            return self.template_if_string(item, var_override=var_override)
+            return item
 
         visited = set()
         item_list = [item]
 
         while len(item_list) > 0:
+            if len(item_list) > 10000:
+                raise PipelineRunException("Potential recursive loop while templating")
+
             current = item_list.pop()
 
             # Check if we've seen this object before
