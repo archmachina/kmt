@@ -254,7 +254,9 @@ class Pipeline:
             # point
             spec_util = SpecUtil(self.common.environment, state.vars)
             step_inner = spec_util.extract_property(step_outer, step_type, default={})
-            step_inner = spec_util.resolve(step_inner, dict)
+            step_inner = spec_util.resolve(step_inner, (dict, type(None)))
+            if step_inner is None:
+                step_inner = {}
             util.validate(isinstance(step_inner, dict), "Invalid value for step inner configuration")
 
             # Create the handler object to process the handler config
