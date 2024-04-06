@@ -65,7 +65,7 @@ class Common:
 
     def add_support_handlers(self, handlers):
         util.validate(isinstance(handlers, list), "Invalid handlers passed to add_support_handlers")
-        util.validate((all(inspect.isclass(x) and issubclass(x, SupportHandler)) for x in handlers), "Invalid handlers passed to add_support_handlers")
+        util.validate((all(inspect.isclass(x) and issubclass(x, StepSupport)) for x in handlers), "Invalid handlers passed to add_support_handlers")
 
         for handler in handlers:
             if handler not in self.support_handlers:
@@ -92,20 +92,30 @@ class PipelineStepState:
 
         self.skip_handler = False
 
-class SupportHandler:
+class PipelineSupport:
+    def init(self, pipeline):
+        util.validate(isinstance(pipeline, Pipeline), "Invalid pipeline passed to PipelineSupport")
+
+    def pre(self):
+        pass
+
+    def post(self):
+        pass
+
+class StepSupport:
     def init(self, state):
-        util.validate(isinstance(state, PipelineStepState), "Invalid step state passed to SupportHandler")
+        util.validate(isinstance(state, PipelineStepState), "Invalid step state passed to StepSupport")
 
         self.state = state
 
     def extract(self, step):
-        raise PipelineRunException("parse undefined in SupportHandler")
+        raise PipelineRunException("parse undefined in StepSupport")
 
     def pre(self):
-        raise PipelineRunException("pre undefined in SupportHandler")
+        raise PipelineRunException("pre undefined in StepSupport")
 
     def post(self):
-        raise PipelineRunException("post undefined in SupportHandler")
+        raise PipelineRunException("post undefined in StepSupport")
 
 class Handler:
     def init(self, state):

@@ -8,7 +8,7 @@ from . import types
 
 logger = logging.getLogger(__name__)
 
-class SupportHandlerSum(types.SupportHandler):
+class StepSupportSum(types.StepSupport):
     """
     """
     def extract(self, step_def):
@@ -23,7 +23,7 @@ class SupportHandlerSum(types.SupportHandler):
 
         logger.debug(f"sum: document short sum: {block.vars['shortsum']}")
 
-class SupportHandlerWhen(types.SupportHandler):
+class StepSupportWhen(types.StepSupport):
     def extract(self, step_def):
         # When condition
         self.when = self.state.spec_util.extract_property(step_def, "when", default=[])
@@ -64,7 +64,7 @@ class SupportHandlerWhen(types.SupportHandler):
     def post(self):
         pass
 
-class SupportHandlerTags(types.SupportHandler):
+class StepSupportTags(types.StepSupport):
     def extract(self, step_def):
         # Extract match any tags
         self.match_any_tags = self.state.spec_util.extract_property(step_def, "match_any_tags", default=[])
@@ -121,7 +121,7 @@ class SupportHandlerTags(types.SupportHandler):
             for tag in apply_tags:
                 block.tags.add(spec_util.resolve(tag, str))
 
-class SupportHandlerMetadata(types.SupportHandler):
+class StepSupportMetadata(types.StepSupport):
     def extract(self, step_def):
         self.match_group = self.state.spec_util.extract_property(step_def, "match_group")
 
@@ -182,9 +182,6 @@ class SupportHandlerMetadata(types.SupportHandler):
                     name = metadata.get("name", "")
                     namespace = metadata.get("namespace", "")
 
-                # Save the parsed manifest back to the block to normalise the yaml format
-                block.text = yaml.dump(manifest, explicit_start=True)
-
             block.vars["metadata_group"] = group
             block.vars["metadata_version"] = version
             block.vars["metadata_kind"] = kind
@@ -230,7 +227,7 @@ class SupportHandlerMetadata(types.SupportHandler):
     def post(self):
         pass
 
-class SupportHandlerSplitYaml(types.SupportHandler):
+class StepSupportSplitYaml(types.StepSupport):
     def extract(self, step_def):
         pass
 
@@ -285,8 +282,8 @@ class SupportHandlerSplitYaml(types.SupportHandler):
 
             logger.debug(f"split_yaml: output 1 document -> {len(documents)} documents")
 
-# types.default_support_handlers.append(SupportHandlerSum)
-types.default_support_handlers.append(SupportHandlerSplitYaml)
-types.default_support_handlers.append(SupportHandlerMetadata)
-types.default_support_handlers.append(SupportHandlerTags)
-types.default_support_handlers.append(SupportHandlerWhen)
+# types.default_support_handlers.append(StepSupportSum)
+types.default_support_handlers.append(StepSupportSplitYaml)
+types.default_support_handlers.append(StepSupportMetadata)
+types.default_support_handlers.append(StepSupportTags)
+types.default_support_handlers.append(StepSupportWhen)
