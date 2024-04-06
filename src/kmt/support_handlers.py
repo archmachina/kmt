@@ -206,10 +206,14 @@ class SupportHandlerMetadata(types.SupportHandler):
                 continue
 
             # k8s kind match
-            match_kind = spec_util.resolve(self.match_kind, (str, type(None)))
-            if match_kind is not None and not re.search(match_kind, kind):
-                self.state.working_blocks.remove(block)
-                continue
+            match_kind = spec_util.resolve(self.match_kind, (list, str, type(None)))
+            if match_kind is not None:
+                if isinstance(match_kind, str):
+                    match_kind = [match_kind]
+
+                if not any((x.lower() == kind.lower()) for x in match_kind):
+                    self.state.working_blocks.remove(block)
+                    continue
 
             # k8s namespace match
             match_namespace = spec_util.resolve(self.match_namespace, (str, type(None)))

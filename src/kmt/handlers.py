@@ -342,6 +342,19 @@ class HandlerJsonPatch(types.Handler):
             # Save the yaml format back to the block
             block.text = yaml.dump(manifest, explicit_start=True)
 
+class HandlerDelete(types.Handler):
+    def extract(self, step_def):
+        pass
+
+    def run(self):
+        working_blocks = self.state.working_blocks.copy()
+
+        # Remove all of the remaining working blocks from the working list
+        # and pipeline
+        for block in working_blocks:
+            self.state.working_blocks.remove(block)
+            self.state.pipeline.blocks.remove(block)
+
 class HandlerMetadata(types.Handler):
     def extract(self, step_def):
         self.name = self.state.spec_util.extract_property(step_def, "name")
@@ -408,4 +421,4 @@ types.default_handlers["template"] = HandlerTemplate
 types.default_handlers["sum"] = HandlerSum
 types.default_handlers["jsonpatch"] = HandlerJsonPatch
 types.default_handlers["metadata"] = HandlerMetadata
-
+types.default_handlers["delete"] = HandlerDelete
