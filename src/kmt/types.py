@@ -90,6 +90,8 @@ class PipelineStepState:
         self.working_blocks = working_blocks
         self.spec_util = SpecUtil(self.pipeline.common.environment, self.vars)
 
+        self.skip_handler = False
+
 class SupportHandler:
     def init(self, state):
         util.validate(isinstance(state, PipelineStepState), "Invalid step state passed to SupportHandler")
@@ -280,10 +282,11 @@ class Pipeline:
                 support_handler.pre()
 
             # Run the main handler
-            logger.debug(f"Pipeline blocks: {len(self.blocks)}. Working blocks: {len(state.working_blocks)}")
-            logger.debug(f"Calling handler: {handler}")
-            os.chdir(self.configdir)
-            handler.run()
+            if not state.skip_handler:
+                logger.debug(f"Pipeline blocks: {len(self.blocks)}. Working blocks: {len(state.working_blocks)}")
+                logger.debug(f"Calling handler: {handler}")
+                os.chdir(self.configdir)
+                handler.run()
 
             # Run post for any support handlers
             logger.debug("Running post support handlers")

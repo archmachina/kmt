@@ -28,22 +28,38 @@ class SupportHandlerWhen(types.SupportHandler):
         # When condition
         self.when = self.state.spec_util.extract_property(step_def, "when", default=[])
 
+        # Filter condition
+        self.filter = self.state.spec_util.extract_property(step_def, "filter", default=[])
+
     def pre(self):
         working_blocks = self.state.working_blocks.copy()
+        spec_util = self.state.spec_util
+
+        when = spec_util.resolve(self.when, (list, str))
+        if isinstance(when, str):
+            when = [when]
+
+        if len(when) > 0:
+            for condition in when:
+                result = spec_util.resolve("{{" + condition + "}}", bool)
+                if not result:
+                    self.state.skip_handler = True
+                    return
 
         for block in working_blocks:
             block_vars = block.create_scoped_vars(self.state.vars)
             spec_util = self.state.spec_util.new_scope(block_vars)
 
-            when = spec_util.resolve(self.when, (list, str))
-            if isinstance(when, str):
-                when = [when]
+            filter = spec_util.resolve(self.filter, (list, str))
+            if isinstance(filter, str):
+                filter = [filter]
 
-            if len(when) > 0:
-                for condition in when:
+            if len(filter) > 0:
+                for condition in filter:
                     result = spec_util.resolve("{{" + condition + "}}", bool)
                     if not result:
                         self.state.working_blocks.remove(block)
+                        break
 
     def post(self):
         pass
