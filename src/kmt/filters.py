@@ -25,15 +25,17 @@ def FilterBase64Decode(value, encoding="utf-8"):
     bytes = value.encode("utf-8")
     return base64.b64decode(bytes).decode(encoding)
 
-def FilterLoadAsString(filename, encoding="utf-8"):
+def FilterIncludeFile(filename, encoding="utf-8"):
     with open(filename, "r", encoding=encoding) as file:
         content = file.read()
 
-        result = (json.dumps(content))[1:-1]
+    return content
 
-    return result
+def FilterJsonEscape(value):
+    return (json.dumps(str(value)))[1:-1]
 
 types.default_filters["hash"] = FilterHash
 types.default_filters["b64encode"] = FilterBase64Encode
 types.default_filters["b64decode"] = FilterBase64Decode
-types.default_filters["load_as_string"] = FilterLoadAsString
+types.default_filters["include_file"] = FilterIncludeFile
+types.default_filters["json_escape"] = FilterJsonEscape
