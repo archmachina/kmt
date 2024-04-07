@@ -13,7 +13,8 @@ logger = logging.getLogger(__name__)
 # Default handlers, support handlers and filters. These can be amended elsewhere
 # and apply to newly created Common objects
 default_handlers = {}
-default_support_handlers = []
+default_step_support_handlers = []
+default_pipeline_support_handlers = []
 default_filters = {}
 
 # Define a representer for pyyaml to format multiline strings as block quotes
@@ -51,25 +52,36 @@ class TextBlock:
 class Common:
     def __init__(self):
         self.environment = jinja2.Environment()
+
         self.handlers = copy.copy(default_handlers)
-        self.support_handlers = copy.copy(default_support_handlers)
+        self.step_support_handlers = copy.copy(default_step_support_handlers)
+        self.pipeline_support_handlers = copy.copy(default_pipeline_support_handlers)
+
         for filter_name in default_filters:
             self.environment.filters[filter_name] = default_filters[filter_name]
 
     def add_handlers(self, handlers):
         util.validate(isinstance(handlers, dict), "Invalid handlers passed to add_handlers")
-        util.validate((all(x is None or (inspect.isclass(x) and issubclass(x, Handler))) for x in handlers.values()), "Invalid handlers passed to add_handlers")
+        util.validate((all(x is None or (inspect.isclass(x) and issubclass(x, StepHandler))) for x in handlers.values()), "Invalid handlers passed to add_handlers")
 
         for key in handlers:
             self.handlers[key] = handlers[key]
 
-    def add_support_handlers(self, handlers):
-        util.validate(isinstance(handlers, list), "Invalid handlers passed to add_support_handlers")
-        util.validate((all(inspect.isclass(x) and issubclass(x, StepSupport)) for x in handlers), "Invalid handlers passed to add_support_handlers")
+    def add_step_support_handlers(self, handlers):
+        util.validate(isinstance(handlers, list), "Invalid handlers passed to add_step_support_handlers")
+        util.validate((all(inspect.isclass(x) and issubclass(x, StepSupportHandler)) for x in handlers), "Invalid handlers passed to add_step_support_handlers")
 
         for handler in handlers:
-            if handler not in self.support_handlers:
-                self.support_handlers.append(handler)
+            if handler not in self.step_support_handlers:
+                self.step_support_handlers.append(handler)
+
+    def add_pipeline_support_handlers(self, handlers):
+        util.validate(isinstance(handlers, list), "Invalid handlers passed to add_pipeline_support_handlers")
+        util.validate((all(inspect.isclass(x) and issubclass(x, PipelineSupportHandler)) for x in handlers), "Invalid handlers passed to add_pipeline_support_handlers")
+
+        for handler in handlers:
+            if handler not in self.pipeline_support_handlers:
+                self.pipeline_support_handlers.append(handler)
 
     def add_filters(self, filters):
         util.validate(isinstance(filters, dict), "Invalid filters passed to add_filters")
@@ -92,42 +104,46 @@ class PipelineStepState:
 
         self.skip_handler = False
 
-class PipelineSupport:
-    def init(self, pipeline):
-        util.validate(isinstance(pipeline, Pipeline), "Invalid pipeline passed to PipelineSupport")
+class PipelineSupportHandler:
+    def init(self, pipeline, pipeline_vars):
+        util.validate(isinstance(pipeline, Pipeline), "Invalid pipeline passed to PipelineSupportHandler")
+
+        self.pipeline = pipeline
+        self.pipeline_vars = pipeline_vars
+        self.spec_util = SpecUtil(self.pipeline.common.environment, self.pipeline_vars)
 
     def pre(self):
-        pass
+        raise PipelineRunException("pre undefined in PipelineSupportHandler")
 
     def post(self):
-        pass
+        raise PipelineRunException("post undefined in PipelineSupportHandler")
 
-class StepSupport:
+class StepSupportHandler:
     def init(self, state):
-        util.validate(isinstance(state, PipelineStepState), "Invalid step state passed to StepSupport")
+        util.validate(isinstance(state, PipelineStepState), "Invalid step state passed to StepSupportHandler")
 
         self.state = state
 
     def extract(self, step):
-        raise PipelineRunException("parse undefined in StepSupport")
+        raise PipelineRunException("parse undefined in StepSupportHandler")
 
     def pre(self):
-        raise PipelineRunException("pre undefined in StepSupport")
+        raise PipelineRunException("pre undefined in StepSupportHandler")
 
     def post(self):
-        raise PipelineRunException("post undefined in StepSupport")
+        raise PipelineRunException("post undefined in StepSupportHandler")
 
-class Handler:
+class StepHandler:
     def init(self, state):
-        util.validate(isinstance(state, PipelineStepState), "Invalid step state passed to Handler")
+        util.validate(isinstance(state, PipelineStepState), "Invalid step state passed to StepHandler")
 
         self.state = state
 
     def extract(self, step):
-        raise PipelineRunException("parse undefined in Handler")
+        raise PipelineRunException("parse undefined in StepHandler")
 
     def run(self):
-        raise PipelineRunException("run undefined in Handler")
+        raise PipelineRunException("run undefined in StepHandler")
 
 class Pipeline:
     def __init__(self, configdir, common=None, pipeline_vars=None, blocks=None):
@@ -229,6 +245,17 @@ class Pipeline:
             self._vars[key] = config_vars[key]
 
     def run(self):
+
+        # Create and initialise pipeline support handlers
+        ps_handlers = [x() for x in self.common.pipeline_support_handlers]
+        for ps_handler in ps_handlers:
+            ps_handler.init(self, self._vars)
+
+        # Run pre for all pipeline support handlers
+        for ps_handler in ps_handlers:
+            logger.debug(f"Running pipeline support handler pre: {ps_handler}")
+            ps_handler.pre()
+
         # Process each of the steps in this pipeline
         for step_outer in self.pipeline_steps:
             logger.debug(f"Processing step with specification: {step_outer}")
@@ -242,8 +269,8 @@ class Pipeline:
 
             # Initialise each support handler based on the step definition
             # This is the outer step definition, not the arguments to the handler
-            support_handlers = [x() for x in self.common.support_handlers]
-            for support in support_handlers:
+            ss_handlers = [x() for x in self.common.step_support_handlers]
+            for support in ss_handlers:
                 support.init(state)
                 support.extract(step_outer)
 
@@ -286,10 +313,10 @@ class Pipeline:
             # Run pre for any support handlers
             logger.debug("Running pre support handlers")
             logger.debug(f"Pipeline blocks: {len(self.blocks)}. Working blocks: {len(state.working_blocks)}")
-            for support_handler in support_handlers:
-                logger.debug(f"Calling support handler pre: {support_handler}")
+            for ss_handler in ss_handlers:
+                logger.debug(f"Calling support handler pre: {ss_handler}")
                 os.chdir(self.configdir)
-                support_handler.pre()
+                ss_handler.pre()
 
             # Run the main handler
             if not state.skip_handler:
@@ -301,10 +328,16 @@ class Pipeline:
             # Run post for any support handlers
             logger.debug("Running post support handlers")
             logger.debug(f"Pipeline blocks: {len(self.blocks)}. Working blocks: {len(state.working_blocks)}")
-            for support_handler in support_handlers:
-                logger.debug(f"Calling support handler post: {support_handler}")
+            for ss_handler in ss_handlers:
+                logger.debug(f"Calling support handler post: {ss_handler}")
                 os.chdir(self.configdir)
-                support_handler.post()
+                ss_handler.post()
+
+
+        # Run post for all pipeline support handlers
+        for ps_handler in ps_handlers:
+            logger.debug(f"Running pipeline support handler post: {ps_handler}")
+            ps_handler.post()
 
         return self.blocks + self._input_blocks
 

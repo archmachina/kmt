@@ -14,7 +14,7 @@ from .exception import PipelineRunException
 
 logger = logging.getLogger(__name__)
 
-class HandlerPipeline(types.Handler):
+class StepHandlerPipeline(types.StepHandler):
     """
     """
     def extract(self, step_def):
@@ -68,7 +68,7 @@ class HandlerPipeline(types.Handler):
             self.state.working_blocks.append(block)
             self.state.pipeline.blocks.append(block)
 
-class HandlerImport(types.Handler):
+class StepHandlerImport(types.StepHandler):
     """
     """
     def extract(self, step_def):
@@ -106,7 +106,7 @@ class HandlerImport(types.Handler):
                 self.state.pipeline.blocks.append(new_block)
                 self.state.working_blocks.append(new_block)
 
-class HandlerVars(types.Handler):
+class StepHandlerVars(types.StepHandler):
     """
     """
     def extract(self, step_def):
@@ -132,7 +132,7 @@ class HandlerVars(types.Handler):
                 for key in block_vars:
                     block.vars[key] = spec_util.template_if_string(block_vars[key])
 
-class HandlerReplace(types.Handler):
+class StepHandlerReplace(types.StepHandler):
     """
     """
     def extract(self, step_def):
@@ -170,7 +170,7 @@ class HandlerReplace(types.Handler):
                 else:
                     block.text = block.text.replace(replace_key, replace_value)
 
-class HandlerSplitYaml(types.Handler):
+class StepHandlerSplitYaml(types.StepHandler):
     """
     """
     def extract(self, step_def):
@@ -222,7 +222,7 @@ class HandlerSplitYaml(types.Handler):
 
             logger.debug(f"split_yaml: output 1 document -> {len(documents)} documents")
 
-class HandlerStdin(types.Handler):
+class StepHandlerStdin(types.StepHandler):
     """
     """
     def extract(self, step_def):
@@ -254,7 +254,7 @@ class HandlerStdin(types.Handler):
             self.state.pipeline.blocks.append(item)
             self.state.working_blocks.append(item)
 
-class HandlerStdout(types.Handler):
+class StepHandlerStdout(types.StepHandler):
     """
     """
     def extract(self, step_def):
@@ -279,7 +279,7 @@ class HandlerStdout(types.Handler):
             if suffix is not None:
                 print(suffix)
 
-class HandlerTemplate(types.Handler):
+class StepHandlerTemplate(types.StepHandler):
     """
     """
     def extract(self, step_def):
@@ -301,7 +301,7 @@ class HandlerTemplate(types.Handler):
             if not isinstance(block.text, str):
                 raise PipelineRunException("Could not template source text")
 
-class HandlerSum(types.Handler):
+class StepHandlerSum(types.StepHandler):
     """
     """
     def extract(self, step_def):
@@ -313,7 +313,7 @@ class HandlerSum(types.Handler):
 
             logger.debug(f"sum: document short sum: {block.vars['shortsum']}")
 
-class HandlerJsonPatch(types.Handler):
+class StepHandlerJsonPatch(types.StepHandler):
     def extract(self, step_def):
         self.patches = self.state.spec_util.extract_property(step_def, "patches")
 
@@ -342,7 +342,7 @@ class HandlerJsonPatch(types.Handler):
             # Save the yaml format back to the block
             block.text = yaml.dump(manifest, explicit_start=True)
 
-class HandlerDelete(types.Handler):
+class StepHandlerDelete(types.StepHandler):
     def extract(self, step_def):
         pass
 
@@ -355,7 +355,7 @@ class HandlerDelete(types.Handler):
             self.state.working_blocks.remove(block)
             self.state.pipeline.blocks.remove(block)
 
-class HandlerMetadata(types.Handler):
+class StepHandlerMetadata(types.StepHandler):
     def extract(self, step_def):
         self.name = self.state.spec_util.extract_property(step_def, "name")
 
@@ -410,15 +410,15 @@ class HandlerMetadata(types.Handler):
 
             block.text = yaml.dump(manifest, explicit_start=True)
 
-types.default_handlers["pipeline"] = HandlerPipeline
-types.default_handlers["import"] = HandlerImport
-types.default_handlers["vars"] = HandlerVars
-types.default_handlers["replace"] = HandlerReplace
-types.default_handlers["splityaml"] = HandlerSplitYaml
-types.default_handlers["stdin"] = HandlerStdin
-types.default_handlers["stdout"] = HandlerStdout
-types.default_handlers["template"] = HandlerTemplate
-types.default_handlers["sum"] = HandlerSum
-types.default_handlers["jsonpatch"] = HandlerJsonPatch
-types.default_handlers["metadata"] = HandlerMetadata
-types.default_handlers["delete"] = HandlerDelete
+types.default_handlers["pipeline"] = StepHandlerPipeline
+types.default_handlers["import"] = StepHandlerImport
+types.default_handlers["vars"] = StepHandlerVars
+types.default_handlers["replace"] = StepHandlerReplace
+types.default_handlers["splityaml"] = StepHandlerSplitYaml
+types.default_handlers["stdin"] = StepHandlerStdin
+types.default_handlers["stdout"] = StepHandlerStdout
+types.default_handlers["template"] = StepHandlerTemplate
+types.default_handlers["sum"] = StepHandlerSum
+types.default_handlers["jsonpatch"] = StepHandlerJsonPatch
+types.default_handlers["metadata"] = StepHandlerMetadata
+types.default_handlers["delete"] = StepHandlerDelete

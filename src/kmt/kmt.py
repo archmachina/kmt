@@ -13,6 +13,7 @@ from . import types
 from . import handlers
 from . import filters
 from . import step_support
+from . import pipeline_support
 
 logger = logging.getLogger(__name__)
 

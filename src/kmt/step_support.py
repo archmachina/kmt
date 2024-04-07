@@ -8,7 +8,7 @@ from . import types
 
 logger = logging.getLogger(__name__)
 
-class StepSupportSum(types.StepSupport):
+class StepSupportSum(types.StepSupportHandler):
     """
     """
     def extract(self, step_def):
@@ -23,7 +23,7 @@ class StepSupportSum(types.StepSupport):
 
         logger.debug(f"sum: document short sum: {block.vars['shortsum']}")
 
-class StepSupportWhen(types.StepSupport):
+class StepSupportWhen(types.StepSupportHandler):
     def extract(self, step_def):
         # When condition
         self.when = self.state.spec_util.extract_property(step_def, "when", default=[])
@@ -64,7 +64,7 @@ class StepSupportWhen(types.StepSupport):
     def post(self):
         pass
 
-class StepSupportTags(types.StepSupport):
+class StepSupportTags(types.StepSupportHandler):
     def extract(self, step_def):
         # Extract match any tags
         self.match_any_tags = self.state.spec_util.extract_property(step_def, "match_any_tags", default=[])
@@ -121,7 +121,7 @@ class StepSupportTags(types.StepSupport):
             for tag in apply_tags:
                 block.tags.add(spec_util.resolve(tag, str))
 
-class StepSupportMetadata(types.StepSupport):
+class StepSupportMetadata(types.StepSupportHandler):
     def extract(self, step_def):
         self.match_group = self.state.spec_util.extract_property(step_def, "match_group")
 
@@ -227,7 +227,7 @@ class StepSupportMetadata(types.StepSupport):
     def post(self):
         pass
 
-class StepSupportSplitYaml(types.StepSupport):
+class StepSupportSplitYaml(types.StepSupportHandler):
     def extract(self, step_def):
         pass
 
@@ -282,8 +282,8 @@ class StepSupportSplitYaml(types.StepSupport):
 
             logger.debug(f"split_yaml: output 1 document -> {len(documents)} documents")
 
-# types.default_support_handlers.append(StepSupportSum)
-types.default_support_handlers.append(StepSupportSplitYaml)
-types.default_support_handlers.append(StepSupportMetadata)
-types.default_support_handlers.append(StepSupportTags)
-types.default_support_handlers.append(StepSupportWhen)
+# types.default_step_support_handlers.append(StepSupportSum)
+types.default_step_support_handlers.append(StepSupportSplitYaml)
+types.default_step_support_handlers.append(StepSupportMetadata)
+types.default_step_support_handlers.append(StepSupportTags)
+types.default_step_support_handlers.append(StepSupportWhen)
