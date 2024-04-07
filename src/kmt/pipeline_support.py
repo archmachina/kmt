@@ -15,11 +15,18 @@ class PipelineSupportSort(types.PipelineSupportHandler):
             "metadata_group",
             "metadata_version",
             "metadata_kind",
-            "metadata_namespace"
+            "metadata_namespace",
             "metadata_name",
         ]
 
-        sorted(self.pipeline.blocks, key=lambda x: tuple([
+        for block in self.pipeline.blocks:
+            util.refresh_metadata(block)
+            data = tuple([block.vars.get(key, "") for key in keys])
+            logger.debug(f"metadata: {data}")
+
+        # Don't need a particular ordering, just consistency in output
+        # to allow for easy diff comparison
+        self.pipeline.blocks = sorted(self.pipeline.blocks, key=lambda x: "".join([
             x.vars.get(key, "") for key in keys
         ]))
 
