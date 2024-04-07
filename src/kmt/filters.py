@@ -17,10 +17,12 @@ def FilterHash(value, name="sha1"):
     return instance.hexdigest()
 
 def FilterBase64Encode(value, encoding="utf-8"):
-    return base64.b64encode(str(value).encode(encoding))
+    bytes = base64.b64encode(str(value).encode(encoding))
+    return bytes.decode("utf-8")
 
 def FilterBase64Decode(value, encoding="utf-8"):
-    return base64.b64decode(value).decode(encoding)
+    bytes = value.encode("utf-8")
+    return base64.b64decode(bytes).decode(encoding)
 
 types.default_filters["hash"] = FilterHash
 types.default_filters["b64encode"] = FilterBase64Encode
