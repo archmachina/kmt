@@ -166,7 +166,7 @@ class Pipeline:
         self.common = common
         self._input_blocks = blocks
         self.blocks = []
-        self._vars = {}
+        self.vars = {}
 
         #
         # Read and parse configuration file as yaml
@@ -234,22 +234,22 @@ class Pipeline:
 
         # Merge defaults in to the pipeline vars
         for key in config_defaults:
-            self._vars[key] = config_defaults[key]
+            self.vars[key] = config_defaults[key]
 
         # Merge supplied vars in to the pipeline vars
         for key in pipeline_vars:
-            self._vars[key] = pipeline_vars[key]
+            self.vars[key] = pipeline_vars[key]
 
         # Merge 'vars' in to the pipeline vars last as these take preference
         for key in config_vars:
-            self._vars[key] = config_vars[key]
+            self.vars[key] = config_vars[key]
 
     def run(self):
 
         # Create and initialise pipeline support handlers
         ps_handlers = [x() for x in self.common.pipeline_support_handlers]
         for ps_handler in ps_handlers:
-            ps_handler.init(self, self._vars)
+            ps_handler.init(self, self.vars)
 
         # Run pre for all pipeline support handlers
         for ps_handler in ps_handlers:
@@ -261,7 +261,7 @@ class Pipeline:
             logger.debug(f"Processing step with specification: {step_outer}")
 
             # Create a common state used by each support handler and handler
-            step_vars = copy.deepcopy(self._vars)
+            step_vars = copy.deepcopy(self.vars)
             step_vars["env"] = os.environ.copy()
 
             state = PipelineStepState(pipeline=self, step_vars=step_vars,

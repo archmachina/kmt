@@ -122,6 +122,7 @@ class StepHandlerVars(types.StepHandler):
         if pipeline_vars is not None:
             for key in pipeline_vars:
                 self.state.pipeline.vars[key] = spec_util.template_if_string(pipeline_vars[key])
+                logger.debug(f"Set pipeline var {key} -> {self.state.pipeline.vars[key]}")
 
         for block in working_blocks:
             block_vars = block.create_scoped_vars(self.state.vars)
@@ -131,6 +132,7 @@ class StepHandlerVars(types.StepHandler):
             if block_vars is not None:
                 for key in block_vars:
                     block.vars[key] = spec_util.template_if_string(block_vars[key])
+                    logger.debug(f"Set block var {key} -> {block.vars[key]}")
 
 class StepHandlerReplace(types.StepHandler):
     """
