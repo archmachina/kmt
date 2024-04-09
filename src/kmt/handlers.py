@@ -76,6 +76,8 @@ class StepHandlerImport(types.StepHandler):
 
         self.recursive = self.state.spec_util.extract_property(step_def, "recursive", default=False)
 
+        self.template = self.state.spec_util.extract_property(step_def, "template", default=True)
+
     def run(self):
         spec_util = self.state.spec_util
 
@@ -85,6 +87,8 @@ class StepHandlerImport(types.StepHandler):
         import_files = [spec_util.resolve(x, str) for x in import_files]
 
         recursive = spec_util.resolve(self.recursive, bool)
+
+        template = spec_util.resolve(self.template, bool)
 
         for import_file in import_files:
             logger.debug(f"import: processing file glob: {import_file}")
@@ -100,11 +104,17 @@ class StepHandlerImport(types.StepHandler):
             logger.debug(f"import: reading file {filename}")
             with open(filename, "r", encoding="utf-8") as file:
                 content = file.read()
-                new_block = types.TextBlock(content)
-                new_block.vars["import_filename"] = filename
 
-                self.state.pipeline.blocks.append(new_block)
-                self.state.working_blocks.append(new_block)
+            if template:
+                content = spec_util.template_if_string(content)
+                if not isinstance(content, str):
+                    raise PipelineRunException("Could not template import text")
+
+            new_block = types.TextBlock(content)
+            new_block.vars["import_filename"] = filename
+
+            self.state.pipeline.blocks.append(new_block)
+            self.state.working_blocks.append(new_block)
 
 class StepHandlerVars(types.StepHandler):
     """
@@ -281,28 +291,6 @@ class StepHandlerStdout(types.StepHandler):
             if suffix is not None:
                 print(suffix)
 
-class StepHandlerTemplate(types.StepHandler):
-    """
-    """
-    def extract(self, step_def):
-        self.vars = self.state.spec_util.extract_property(step_def, "vars", default={})
-
-    def run(self):
-        working_blocks = self.state.working_blocks.copy()
-
-        for block in working_blocks:
-            block_vars = block.create_scoped_vars(self.state.vars)
-
-            # Merge in any vars specified on the step after the block vars
-            for key in self.vars:
-                block_vars[key] = self.vars[key]
-
-            spec_util = self.state.spec_util.new_scope(block_vars)
-
-            block.text = spec_util.template_if_string(block.text)
-            if not isinstance(block.text, str):
-                raise PipelineRunException("Could not template source text")
-
 class StepHandlerSum(types.StepHandler):
     """
     """
@@ -419,7 +407,6 @@ types.default_handlers["replace"] = StepHandlerReplace
 types.default_handlers["splityaml"] = StepHandlerSplitYaml
 types.default_handlers["stdin"] = StepHandlerStdin
 types.default_handlers["stdout"] = StepHandlerStdout
-types.default_handlers["template"] = StepHandlerTemplate
 types.default_handlers["sum"] = StepHandlerSum
 types.default_handlers["jsonpatch"] = StepHandlerJsonPatch
 types.default_handlers["metadata"] = StepHandlerMetadata
