@@ -301,6 +301,7 @@ class Pipeline:
             # Create a common state used by each support handler and handler
             step_vars = copy.deepcopy(self.vars)
             step_vars["env"] = os.environ.copy()
+            step_vars["kmt_manifests"] = self.manifests
 
             state = PipelineStepState(pipeline=self, step_vars=step_vars,
                 working_manifests=self.manifests.copy())
