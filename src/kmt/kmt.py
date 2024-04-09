@@ -51,11 +51,11 @@ def process_args() -> int:
         pipeline = types.Pipeline(path)
 
         # Start executing the pipeline
-        blocks = pipeline.run()
+        manifests = pipeline.run()
 
-        logger.debug(f"Received {len(blocks)} blocks from the pipeline")
-        for block in blocks:
-            print(block.text)
+        logger.debug(f"Received {len(manifests)} manifests from the pipeline")
+        for manifest in manifests:
+            print(manifest)
 
     except Exception as e:  # pylint: disable=broad-exception-caught
         if debug:

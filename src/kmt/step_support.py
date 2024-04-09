@@ -18,10 +18,10 @@ class StepSupportSum(types.StepSupportHandler):
         pass
 
     def post(self):
-        for block in self.state.working_blocks:
-            util.block_sum(block)
+        for manifest in self.state.working_manifests:
+            util.manifest_sum(manifest)
 
-        logger.debug(f"sum: document short sum: {block.vars['shortsum']}")
+        logger.debug(f"sum: document short sum: {manifest.vars['shortsum']}")
 
 class StepSupportWhen(types.StepSupportHandler):
     def extract(self, step_def):
@@ -32,7 +32,7 @@ class StepSupportWhen(types.StepSupportHandler):
         self.filter = self.state.spec_util.extract_property(step_def, "filter", default=[])
 
     def pre(self):
-        working_blocks = self.state.working_blocks.copy()
+        working_manifests = self.state.working_manifests.copy()
         spec_util = self.state.spec_util
 
         when = spec_util.resolve(self.when, (list, str))
@@ -46,9 +46,9 @@ class StepSupportWhen(types.StepSupportHandler):
                     self.state.skip_handler = True
                     return
 
-        for block in working_blocks:
-            block_vars = block.create_scoped_vars(self.state.vars)
-            spec_util = self.state.spec_util.new_scope(block_vars)
+        for manifest in working_manifests:
+            manifest_vars = manifest.create_scoped_vars(self.state.vars)
+            spec_util = self.state.spec_util.new_scope(manifest_vars)
 
             filter = spec_util.resolve(self.filter, (list, str))
             if isinstance(filter, str):
@@ -58,7 +58,7 @@ class StepSupportWhen(types.StepSupportHandler):
                 for condition in filter:
                     result = spec_util.resolve("{{" + condition + "}}", bool)
                     if not result:
-                        self.state.working_blocks.remove(block)
+                        self.state.working_manifests.remove(manifest)
                         break
 
     def post(self):
@@ -79,18 +79,18 @@ class StepSupportTags(types.StepSupportHandler):
         self.apply_tags = self.state.spec_util.extract_property(step_def, "apply_tags", default=[])
 
     def pre(self):
-        working_blocks = self.state.working_blocks.copy()
+        working_manifests = self.state.working_manifests.copy()
 
-        for block in working_blocks:
-            block_vars = block.create_scoped_vars(self.state.vars)
-            spec_util = self.state.spec_util.new_scope(block_vars)
+        for manifest in working_manifests:
+            manifest_vars = manifest.create_scoped_vars(self.state.vars)
+            spec_util = self.state.spec_util.new_scope(manifest_vars)
 
             match_any_tags = spec_util.resolve(self.match_any_tags, list)
             match_any_tags = set([spec_util.resolve(x, str) for x in match_any_tags])
             if len(match_any_tags) > 0:
                 # If there are any 'match_any_tags', then at least one of them has to match with the document
-                if len(match_any_tags.intersection(block.tags)) == 0:
-                    self.state.working_blocks.remove(block)
+                if len(match_any_tags.intersection(manifest.tags)) == 0:
+                    self.state.working_manifests.remove(manifest)
                     continue
 
             match_all_tags = spec_util.resolve(self.match_all_tags, list)
@@ -98,28 +98,28 @@ class StepSupportTags(types.StepSupportHandler):
             if len(match_all_tags) > 0:
                 # If there are any 'match_all_tags', then all of those tags must match the document
                 for tag in match_all_tags:
-                    if tag not in block.tags:
-                        self.state.working_blocks.remove(block)
+                    if tag not in manifest.tags:
+                        self.state.working_manifests.remove(manifest)
                         continue
 
             exclude_tags = spec_util.resolve(self.exclude_tags, list)
             exclude_tags = set([spec_util.resolve(x, str) for x in exclude_tags])
             if len(exclude_tags) > 0:
-                # If there are any exclude tags and any are present in the block, it isn't a match
+                # If there are any exclude tags and any are present in the manifest, it isn't a match
                 for tag in exclude_tags:
-                    if tag in block.tags:
-                        self.state.working_blocks.remove(block)
+                    if tag in manifest.tags:
+                        self.state.working_manifests.remove(manifest)
                         continue
 
     def post(self):
 
-        for block in self.state.working_blocks:
-            block_vars = block.create_scoped_vars(self.state.vars)
-            spec_util = self.state.spec_util.new_scope(block_vars)
+        for manifest in self.state.working_manifests:
+            manifest_vars = manifest.create_scoped_vars(self.state.vars)
+            spec_util = self.state.spec_util.new_scope(manifest_vars)
 
             apply_tags = spec_util.resolve(self.apply_tags, list)
             for tag in apply_tags:
-                block.tags.add(spec_util.resolve(tag, str))
+                manifest.tags.add(spec_util.resolve(tag, str))
 
 class StepSupportMetadata(types.StepSupportHandler):
     def extract(self, step_def):
@@ -134,32 +134,28 @@ class StepSupportMetadata(types.StepSupportHandler):
         self.match_name = self.state.spec_util.extract_property(step_def, "match_name")
 
     def pre(self):
-        working_blocks = self.state.working_blocks.copy()
+        working_manifests = self.state.working_manifests.copy()
 
-        for block in working_blocks:
-            block_vars = block.create_scoped_vars(self.state.vars)
-            spec_util = self.state.spec_util.new_scope(block_vars)
+        for manifest in working_manifests:
+            manifest_vars = manifest.create_scoped_vars(self.state.vars)
+            spec_util = self.state.spec_util.new_scope(manifest_vars)
 
-            util.refresh_metadata(block)
-
-            group = block.vars["metadata_group"]
-            version = block.vars["metadata_version"]
-            kind = block.vars["metadata_kind"]
-            namespace = block.vars["metadata_namespace"]
-            name = block.vars["metadata_name"]
-            api_version = block.vars["metadata_api_version"]
-            manifest = block.vars["metadata_manifest"]
+            group = manifest_vars["kmt_metadata_group"]
+            version = manifest_vars["kmt_metadata_version"]
+            kind = manifest_vars["kmt_metadata_kind"]
+            namespace = manifest_vars["kmt_metadata_namespace"]
+            name = manifest_vars["kmt_metadata_name"]
 
             # k8s group match
             match_group = spec_util.resolve(self.match_group, (str, type(None)))
             if match_group is not None and not re.search(match_group, group):
-                self.state.working_blocks.remove(block)
+                self.state.working_manifests.remove(manifest)
                 continue
 
             # k8s version match
             match_version = spec_util.resolve(self.match_version, (str, type(None)))
             if match_version is not None and not re.search(match_version, version):
-                self.state.working_blocks.remove(block)
+                self.state.working_manifests.remove(manifest)
                 continue
 
             # k8s kind match
@@ -169,82 +165,25 @@ class StepSupportMetadata(types.StepSupportHandler):
                     match_kind = [match_kind]
 
                 if not any((x.lower() == kind.lower()) for x in match_kind):
-                    self.state.working_blocks.remove(block)
+                    self.state.working_manifests.remove(manifest)
                     continue
 
             # k8s namespace match
             match_namespace = spec_util.resolve(self.match_namespace, (str, type(None)))
             if match_namespace is not None and not re.search(match_namespace, namespace):
-                self.state.working_blocks.remove(block)
+                self.state.working_manifests.remove(manifest)
                 continue
 
             # k8s name match
             match_name = spec_util.resolve(self.match_name, (str, type(None)))
             if match_name is not None and not re.search(match_name, name):
-                self.state.working_blocks.remove(block)
+                self.state.working_manifests.remove(manifest)
                 continue
 
     def post(self):
-        for block in self.state.working_blocks:
-            util.refresh_metadata(block)
-
-class StepSupportSplitYaml(types.StepSupportHandler):
-    def extract(self, step_def):
         pass
-
-    def pre(self):
-        pass
-
-    def post(self):
-        working_blocks = self.state.working_blocks.copy()
-
-        for block in working_blocks:
-            block_vars = block.create_scoped_vars(self.state.vars)
-            spec_util = self.state.spec_util.new_scope(block_vars)
-
-            lines = block.text.splitlines()
-            documents = []
-            current = []
-
-            for line in lines:
-
-                # Determine if we have the beginning of a yaml document
-                if line == "---" and len(current) > 0:
-                    documents.append("\n".join(current))
-                    current = []
-
-                current.append(line)
-
-            documents.append("\n".join(current))
-
-            # Strip each document
-            documents = [x.strip() for x in documents]
-
-            # If we have a single document and it's the same as the
-            # original block, just exit
-            if len(documents) == 1 and documents[0] == block.text:
-                return
-
-            # Add all documents to the pipeline text block list
-            new_blocks = [types.TextBlock(item) for item in documents]
-            for new_block in new_blocks:
-                new_block.vars = copy.deepcopy(block.vars)
-                new_block.tags = copy.deepcopy(block.tags)
-
-                # Add to the working blocks for this step, so it can get picked up by following
-                # handlers. Add to the pipeline blocks to be picked up in later steps in the
-                # pipeline
-                self.state.working_blocks.append(new_block)
-                self.state.pipeline.blocks.append(new_block)
-
-            # Remove the original source block from the working list and pipeline list
-            self.state.working_blocks.remove(block)
-            self.state.pipeline.blocks.remove(block)
-
-            logger.debug(f"split_yaml: output 1 document -> {len(documents)} documents")
 
 # types.default_step_support_handlers.append(StepSupportSum)
-types.default_step_support_handlers.append(StepSupportSplitYaml)
 types.default_step_support_handlers.append(StepSupportMetadata)
 types.default_step_support_handlers.append(StepSupportTags)
 types.default_step_support_handlers.append(StepSupportWhen)

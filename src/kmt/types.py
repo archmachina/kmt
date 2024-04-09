@@ -25,27 +25,65 @@ def str_representer(dumper, data):
 
 yaml.add_representer(str, str_representer)
 
-class TextBlock:
-    def __init__(self, text):
-        util.validate(isinstance(text, str), "Invalid text passed to TextBlock init")
+class Manifest:
+    def __init__(self, source):
+        util.validate(isinstance(source, dict), "Invalid source passed to Manifest init")
 
-        self.text = text
+        self.spec = source
 
         self.tags = set()
         self.vars = {}
 
-    def create_scoped_vars(self, base_vars=None):
-        util.validate(isinstance(base_vars, dict), "Invalid base_vars passed to TextBlock create_vars")
+    def __str__(self):
+        output = yaml.dump(self.spec, explicit_start=True)
 
-        if base_vars is None:
-            base_vars = {}
+        return output
+
+    def create_scoped_vars(self, base_vars):
+        util.validate(isinstance(base_vars, dict), "Invalid base_vars passed to Manifest create_vars")
 
         new_vars = base_vars.copy()
 
-        new_vars["tags"] = list(self.tags)
-
+        # Copy any vars that have been defined for the manifest
         for key in self.vars:
             new_vars[key] = self.vars[key]
+
+        # Set some builtin vars
+        new_vars["kmt_tags"] = list(self.tags)
+        new_vars["kmt_manifest"] = self.spec
+
+        # api version
+        api_version = self.spec.get("apiVersion", "")
+
+        # group and version
+        group = ""
+        version = ""
+        if api_version != "":
+            split = api_version.split("/")
+
+            if len(split) == 1:
+                version = split[0]
+            elif len(split) == 2:
+                group = split[0]
+                version = split[1]
+
+        # Kind
+        kind = self.spec.get("kind", "")
+
+        # Name and Namespace
+        namespace = ""
+        name = ""
+        metadata = self.spec.get("metadata")
+        if isinstance(metadata, dict):
+            name = metadata.get("name", "")
+            namespace = metadata.get("namespace", "")
+
+        new_vars["kmt_metadata_group"] = group
+        new_vars["kmt_metadata_version"] = version
+        new_vars["kmt_metadata_kind"] = kind
+        new_vars["kmt_metadata_namespace"] = namespace
+        new_vars["kmt_metadata_name"] = name
+        new_vars["kmt_metadata_api_version"] = api_version
 
         return new_vars
 
@@ -91,15 +129,15 @@ class Common:
             self.environment.filters[key] = filters[key]
 
 class PipelineStepState:
-    def __init__(self, pipeline, step_vars, working_blocks):
+    def __init__(self, pipeline, step_vars, working_manifests):
         util.validate(isinstance(pipeline, Pipeline) or pipeline is None, "Invalid pipeline passed to PipelineStepState")
         util.validate(isinstance(step_vars, dict), "Invalid step vars passed to PipelineStepState")
-        util.validate(isinstance(working_blocks, list) and all(isinstance(x, TextBlock) for x in working_blocks),
-            "Invalid working blocks passed to PipelineStepState")
+        util.validate(isinstance(working_manifests, list) and all(isinstance(x, Manifest) for x in working_manifests),
+            "Invalid working manifests passed to PipelineStepState")
 
         self.pipeline = pipeline
         self.vars = step_vars
-        self.working_blocks = working_blocks
+        self.working_manifests = working_manifests
         self.spec_util = SpecUtil(self.pipeline.common.environment, self.vars)
 
         self.skip_handler = False
@@ -146,26 +184,26 @@ class StepHandler:
         raise PipelineRunException("run undefined in StepHandler")
 
 class Pipeline:
-    def __init__(self, configdir, common=None, pipeline_vars=None, blocks=None):
+    def __init__(self, configdir, common=None, pipeline_vars=None, manifests=None):
 
         if pipeline_vars is None:
             pipeline_vars = {}
 
-        if blocks is None:
-            blocks = []
+        if manifests is None:
+            manifests = []
         
         if common is None:
             common = Common()
 
         util.validate(isinstance(configdir, str) and configdir != "", "Invalid configdir passed to Pipeline init")
         util.validate(isinstance(pipeline_vars, dict), "Invalid pipeline_vars passed to Pipeline init")
-        util.validate(isinstance(blocks, list) and all(isinstance(x, TextBlock) for x in blocks),
-            "Invalid blocks passed to Pipeline init")
+        util.validate(isinstance(manifests, list) and all(isinstance(x, Manifest) for x in manifests),
+            "Invalid manifests passed to Pipeline init")
         util.validate(isinstance(common, Common), "Invalid common object passed to Pipeline init")
 
         self.common = common
-        self._input_blocks = blocks
-        self.blocks = []
+        self._input_manifests = manifests
+        self.manifests = []
         self.vars = {}
 
         #
@@ -215,15 +253,15 @@ class Pipeline:
         util.validate(isinstance(config_pipeline, list), "Config 'pipeline' is not a list")
         self.pipeline_steps = config_pipeline
 
-        # Accept blocks - whether to include incoming blocks in pipeline processing
-        accept_blocks = spec_util.extract_property(pipeline_spec, "accept_blocks", default=False)
-        accept_blocks = spec_util.resolve(accept_blocks, bool)
-        util.validate(isinstance(accept_blocks, bool), "Invalid type for accept_blocks")
+        # Accept manifests - whether to include incoming manifests in pipeline processing
+        accept_manifests = spec_util.extract_property(pipeline_spec, "accept_manifests", default=False)
+        accept_manifests = spec_util.resolve(accept_manifests, bool)
+        util.validate(isinstance(accept_manifests, bool), "Invalid type for accept_manifests")
 
-        # If accept_blocks is true, we'll apply the pipeline steps to the incoming blocks as well
-        if accept_blocks:
-            self.blocks = self._input_blocks
-            self._input_blocks = []
+        # If accept_manifests is true, we'll apply the pipeline steps to the incoming manifests as well
+        if accept_manifests:
+            self.manifests = self._input_manifests
+            self._input_manifests = []
 
         # Make sure there are no other properties left on the pipeline spec
         util.validate(len(pipeline_spec.keys()) == 0, f"Unknown properties on pipeline specification: {pipeline_spec.keys()}")
@@ -265,7 +303,7 @@ class Pipeline:
             step_vars["env"] = os.environ.copy()
 
             state = PipelineStepState(pipeline=self, step_vars=step_vars,
-                working_blocks=self.blocks.copy())
+                working_manifests=self.manifests.copy())
 
             # Initialise each support handler based on the step definition
             # This is the outer step definition, not the arguments to the handler
@@ -312,7 +350,7 @@ class Pipeline:
 
             # Run pre for any support handlers
             logger.debug("Running pre support handlers")
-            logger.debug(f"Pipeline blocks: {len(self.blocks)}. Working blocks: {len(state.working_blocks)}")
+            logger.debug(f"Pipeline manifests: {len(self.manifests)}. Working manifests: {len(state.working_manifests)}")
             for ss_handler in ss_handlers:
                 logger.debug(f"Calling support handler pre: {ss_handler}")
                 os.chdir(self.configdir)
@@ -320,14 +358,14 @@ class Pipeline:
 
             # Run the main handler
             if not state.skip_handler:
-                logger.debug(f"Pipeline blocks: {len(self.blocks)}. Working blocks: {len(state.working_blocks)}")
+                logger.debug(f"Pipeline manifests: {len(self.manifests)}. Working manifests: {len(state.working_manifests)}")
                 logger.debug(f"Calling handler: {handler}")
                 os.chdir(self.configdir)
                 handler.run()
 
             # Run post for any support handlers
             logger.debug("Running post support handlers")
-            logger.debug(f"Pipeline blocks: {len(self.blocks)}. Working blocks: {len(state.working_blocks)}")
+            logger.debug(f"Pipeline manifests: {len(self.manifests)}. Working manifests: {len(state.working_manifests)}")
             for ss_handler in ss_handlers:
                 logger.debug(f"Calling support handler post: {ss_handler}")
                 os.chdir(self.configdir)
@@ -339,7 +377,7 @@ class Pipeline:
             logger.debug(f"Running pipeline support handler post: {ps_handler}")
             ps_handler.post()
 
-        return self.blocks + self._input_blocks
+        return self.manifests + self._input_manifests
 
 class SpecUtil:
     def __init__(self, environment, template_vars):
