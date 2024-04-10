@@ -6,6 +6,7 @@ import copy
 import logging
 
 from . import util
+
 from .exception import PipelineRunException
 
 logger = logging.getLogger(__name__)
@@ -24,6 +25,34 @@ def str_representer(dumper, data):
     return dumper.represent_scalar("tag:yaml.org,2002:str", data)
 
 yaml.add_representer(str, str_representer)
+
+#
+# Manifest name lookups
+class Lookup:
+    def __init__(self, pattern, group=None, version=None, kind=None, namespace=None):
+        self.pattern = pattern
+        self.group = group
+        self.version = version
+        self.kind = kind
+        self.namespace = namespace
+
+def lookup_representer(dumper: yaml.SafeDumper, lookup: Lookup):
+    return dumper.represent_mapping("!lookup", {
+        "group": lookup.group,
+        "version": lookup.version,
+        "kind": lookup.kind,
+        "namespace": lookup.namespace,
+        "pattern": lookup.pattern
+    })
+
+def lookup_constructor(loader: yaml.SafeLoader, node: yaml.nodes.MappingNode):
+    return Lookup(**loader.construct_mapping(node))
+
+yaml.SafeDumper.add_representer(Lookup, lookup_representer)
+yaml.Dumper.add_representer(Lookup, lookup_representer)
+
+yaml.SafeLoader.add_constructor("!lookup", lookup_constructor)
+yaml.Loader.add_constructor("!lookup", lookup_constructor)
 
 class Manifest:
     def __init__(self, source):
@@ -283,6 +312,66 @@ class Pipeline:
             self.vars[key] = config_vars[key]
 
     def run(self):
+
+        # Run the pipeline and capture any manifests, without resolving lookups
+        manifests = self.run_no_resolve()
+
+        for manifest in manifests:
+            visited = set()
+            item_list = [manifest.spec]
+
+            while len(item_list) > 0:
+                if len(item_list) > 10000:
+                    raise PipelineRunException("Potential recursive loop while templating")
+
+                current = item_list.pop()
+
+                # Check if we've seen this object before
+                if id(current) in visited:
+                    continue
+
+                # Save this to the visited list, so we don't revisit again, if there is a loop
+                # in the origin object
+                visited.add(id(current))
+
+                if isinstance(current, dict):
+                    for key in current:
+                        if isinstance(current[key], (dict, list)):
+                            item_list.append(current[key])
+                        else:
+                            current[key] = self._resolve_reference(current[key])
+                elif isinstance(current, list):
+                    index = 0
+                    while index < len(current):
+                        if isinstance(current[index], (dict, list)):
+                            item_list.append(current[index])
+                        else:
+                            current[index] = self._resolve_reference(current[index])
+
+                        index = index + 1
+                else:
+                    # Anything non dictionary or list should never have ended up in this list, so this
+                    # is really an internal error
+                    raise PipelineRunException(f"Invalid type for resolve in pipeline run: {type(current)}")
+
+        return manifests
+
+    def _resolve_reference(self, item):
+        if isinstance(item, Lookup):
+            manifest = util.lookup_manifest(self.manifests, pattern=item.pattern,
+                group=item.group, version=item.version, kind=item.kind, namespace=item.namespace, multiple=False)
+
+            metadata = manifest.get("metadata")
+            util.validate(isinstance(metadata, dict), f"Invalid metadata on object in _resolve_reference: {type(metadata)}")
+
+            name = metadata.get("name")
+            util.validate(isinstance(name, str), f"Invalid name on object in _resolve_reference: {type(name)}")
+
+            return name
+
+        return item
+
+    def run_no_resolve(self):
 
         # Create and initialise pipeline support handlers
         ps_handlers = [x() for x in self.common.pipeline_support_handlers]
