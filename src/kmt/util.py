@@ -13,8 +13,8 @@ def validate(val, message, extype=exception.ValidationException):
     if not val:
         raise extype(message)
 
-def manifest_sum(manifest):
-    validate(isinstance(manifest, types.Manifest), "Invalid manifest passed to manifest_sum")
+def manifest_hash(manifest):
+    validate(isinstance(manifest, types.Manifest), "Invalid manifest passed to manifest_hash")
 
     md5 = hashlib.md5()
     sha1 = hashlib.sha1()

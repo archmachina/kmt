@@ -124,29 +124,62 @@ class StepHandlerVars(types.StepHandler):
     """
     """
     def extract(self, step_def):
-        self.pipeline_vars = self.state.spec_util.extract_property(step_def, "pipeline", default={})
+        self.pipeline_var_list = self.state.spec_util.extract_property(step_def, "pipeline", default=[])
 
-        self.manifest_vars = self.state.spec_util.extract_property(step_def, "manifest", default={})
+        self.manifest_var_list = self.state.spec_util.extract_property(step_def, "manifest", default=[])
 
     def run(self):
         working_manifests = self.state.working_manifests.copy()
         spec_util = self.state.spec_util
 
-        pipeline_vars = spec_util.resolve(self.pipeline_vars, (dict, type(None)))
-        if pipeline_vars is not None:
-            for key in pipeline_vars:
-                self.state.pipeline.vars[key] = spec_util.template_if_string(pipeline_vars[key])
-                logger.debug(f"Set pipeline var {key} -> {self.state.pipeline.vars[key]}")
+        pipeline_var_list = spec_util.resolve(self.pipeline_var_list, (list, type(None)))
+        if pipeline_var_list is not None:
+            pipeline_var_list = [spec_util.resolve(x, dict) for x in pipeline_var_list]
+            # pipeline_vars should be a list of dictionaries now
+
+            for var_spec in pipeline_var_list:
+                # Extract vars
+                var_spec = var_spec.copy()
+                key = self.state.spec_util.extract_property(var_spec, "key")
+                value = self.state.spec_util.extract_property(var_spec, "value")
+                util.validate(len(var_spec.keys()) == 0, f"Unknown properties on vars spec: {var_spec.keys()}")
+
+                # Resolve any templating and type
+                key = spec_util.resolve(key, str)
+                value = spec_util.resolve(value, str)
+
+                self.state.pipeline.vars[key] = value
+                logger.debug(f"Set pipeline var {key} -> {value}")
 
         for manifest in working_manifests:
             manifest_vars = manifest.create_scoped_vars(self.state.vars)
             spec_util = self.state.spec_util.new_scope(manifest_vars)
 
-            manifest_vars = spec_util.resolve(self.manifest_vars, (dict, type(None)))
-            if manifest_vars is not None:
-                for key in manifest_vars:
-                    manifest.vars[key] = spec_util.template_if_string(manifest_vars[key])
-                    logger.debug(f"Set manifest var {key} -> {manifest.vars[key]}")
+            manifest_var_list = spec_util.resolve(self.manifest_var_list, (list, type(None)))
+
+            if manifest_var_list is not None:
+                manifest_var_list = [spec_util.resolve(x, dict) for x in manifest_var_list]
+                # manifest_var_list should be a list of dictionaries now
+
+                for var_spec in manifest_var_list:
+                    # Extract vars
+                    var_spec = var_spec.copy()
+                    key = self.state.spec_util.extract_property(var_spec, "key")
+                    value = self.state.spec_util.extract_property(var_spec, "value")
+                    set_pipeline = self.state.spec_util.extract_property(var_spec, "pipeline", default=False)
+                    util.validate(len(var_spec.keys()) == 0, f"Unknown properties on vars spec: {var_spec.keys()}")
+
+                    # Resolve any templating and type
+                    key = spec_util.resolve(key, str)
+                    value = spec_util.resolve(value, str)
+                    set_pipeline = spec_util.resolve(set_pipeline, bool)
+
+                    if set_pipeline:
+                        self.state.pipeline.vars[key] = value
+                        logger.debug(f"Set pipeline var {key} -> {value}")
+                    else:
+                        manifest.vars[key] = value
+                        logger.debug(f"Set manifest var {key} -> {value}")
 
 # class StepHandlerReplace(types.StepHandler):
 #     """
@@ -216,7 +249,7 @@ class StepHandlerStdin(types.StepHandler):
             self.state.pipeline.manifests.append(manifest)
             self.state.working_manifests.append(manifest)
 
-class StepHandlerSum(types.StepHandler):
+class StepHandlerRefreshHash(types.StepHandler):
     """
     """
     def extract(self, step_def):
@@ -224,9 +257,9 @@ class StepHandlerSum(types.StepHandler):
 
     def run(self):
         for manifest in self.state.working_manifests:
-            util.manifest_sum(manifest)
+            util.manifest_hash(manifest)
 
-            logger.debug(f"sum: manifest short sum: {manifest.vars['kmt_shortsum']}")
+            logger.debug(f"RefreshHash: manifest short sum: {manifest.vars['kmt_shortsum']}")
 
 class StepHandlerJsonPatch(types.StepHandler):
     def extract(self, step_def):
@@ -309,7 +342,7 @@ types.default_handlers["import"] = StepHandlerImport
 types.default_handlers["vars"] = StepHandlerVars
 # types.default_handlers["replace"] = StepHandlerReplace
 types.default_handlers["stdin"] = StepHandlerStdin
-types.default_handlers["sum"] = StepHandlerSum
+types.default_handlers["refresh_hash"] = StepHandlerRefreshHash
 types.default_handlers["jsonpatch"] = StepHandlerJsonPatch
 types.default_handlers["metadata"] = StepHandlerMetadata
 types.default_handlers["delete"] = StepHandlerDelete

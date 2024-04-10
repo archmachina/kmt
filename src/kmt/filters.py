@@ -3,6 +3,7 @@ import hashlib
 import base64
 import json
 import re
+import yaml
 
 from . import types
 from .exception import PipelineRunException
@@ -11,7 +12,7 @@ from jinja2 import pass_context
 
 logger = logging.getLogger(__name__)
 
-def FilterHash(value, name="sha1"):
+def filter_hash_string(value, name="sha1"):
 
     # Get a reference to the object to use for hashing
     classref = getattr(hashlib, name)
@@ -21,32 +22,51 @@ def FilterHash(value, name="sha1"):
 
     return instance.hexdigest()
 
-def FilterBase64Encode(value, encoding="utf-8"):
+def filter_base64_encode(value, encoding="utf-8"):
     bytes = base64.b64encode(str(value).encode(encoding))
     return bytes.decode("utf-8")
 
-def FilterBase64Decode(value, encoding="utf-8"):
+def filter_base64_decode(value, encoding="utf-8"):
     bytes = value.encode("utf-8")
     return base64.b64decode(bytes).decode(encoding)
 
-def FilterIncludeFile(filename, encoding="utf-8"):
+def filter_include_file(filename, encoding="utf-8"):
     with open(filename, "r", encoding=encoding) as file:
         content = file.read()
 
     return content
 
-def FilterJsonEscape(value):
+def filter_json_escape(value):
     return (json.dumps(str(value)))[1:-1]
 
 @pass_context
-def FilterLookupManifestName(context, name, group=None, version=None, kind=None, namespace=None):
-    item = lookup_manifest(context, name, group, version, kind, namespace)
+def filter_lookup_manifest_name(context, name, group=None, version=None, kind=None, namespace=None):
+    item = lookup_manifest(context, name, group, version, kind, namespace, multiple=False)
 
     return item["metadata"]["name"]
 
 @pass_context
-def FilterLookupManifest(context, name, group=None, version=None, kind=None, namespace=None, multiple=False):
+def filter_lookup_manifest(context, name, group=None, version=None, kind=None, namespace=None, multiple=False):
     return lookup_manifest(context, name, group, version, kind, namespace, multiple)
+
+@pass_context
+def filter_hash_manifest(context, name, hash_type="sha1", group=None, version=None, kind=None, namespace=None):
+
+    # Get a reference to the object to use for hashing
+    classref = getattr(hashlib, hash_type)
+    instance = classref()
+
+    # Retrieve the manifest
+    manifest = lookup_manifest(context, name, group, version, kind, namespace, multiple=False)
+
+    # Convert the manifest spec to byte encoding
+    text = yaml.dump(manifest)
+    encode = text.encode("utf-8")
+
+    # Update the hash object with our yaml representation
+    instance.update(encode)
+
+    return instance.hexdigest()
 
 def lookup_manifest(context, name, group=None, version=None, kind=None, namespace=None, multiple=False):
     if namespace is None:
@@ -113,10 +133,11 @@ def lookup_manifest(context, name, group=None, version=None, kind=None, namespac
 
     return matches[0]
 
-types.default_filters["hash"] = FilterHash
-types.default_filters["b64encode"] = FilterBase64Encode
-types.default_filters["b64decode"] = FilterBase64Decode
-types.default_filters["include_file"] = FilterIncludeFile
-types.default_filters["json_escape"] = FilterJsonEscape
-types.default_filters["lookup_manifest"] = FilterLookupManifest
-types.default_filters["lookup_manifest_name"] = FilterLookupManifestName
+types.default_filters["hash_string"] = filter_hash_string
+types.default_filters["b64encode"] = filter_base64_encode
+types.default_filters["b64decode"] = filter_base64_decode
+types.default_filters["include_file"] = filter_include_file
+types.default_filters["json_escape"] = filter_json_escape
+types.default_filters["lookup_manifest"] = filter_lookup_manifest
+types.default_filters["lookup_manifest_name"] = filter_lookup_manifest_name
+types.default_filters["hash_manifest"] = filter_hash_manifest

@@ -8,7 +8,7 @@ from . import types
 
 logger = logging.getLogger(__name__)
 
-class StepSupportSum(types.StepSupportHandler):
+class StepSupportRefreshHash(types.StepSupportHandler):
     """
     """
     def extract(self, step_def):
@@ -19,9 +19,9 @@ class StepSupportSum(types.StepSupportHandler):
 
     def post(self):
         for manifest in self.state.working_manifests:
-            util.manifest_sum(manifest)
+            util.manifest_hash(manifest)
 
-        logger.debug(f"sum: document short sum: {manifest.vars['shortsum']}")
+        logger.debug(f"RefreshHash: document short sum: {manifest.vars['shortsum']}")
 
 class StepSupportWhen(types.StepSupportHandler):
     def extract(self, step_def):
@@ -183,7 +183,7 @@ class StepSupportMetadata(types.StepSupportHandler):
     def post(self):
         pass
 
-# types.default_step_support_handlers.append(StepSupportSum)
 types.default_step_support_handlers.append(StepSupportMetadata)
 types.default_step_support_handlers.append(StepSupportTags)
 types.default_step_support_handlers.append(StepSupportWhen)
+# types.default_step_support_handlers.append(StepSupportSum)
