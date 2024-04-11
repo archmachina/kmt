@@ -29,12 +29,12 @@ yaml.add_representer(str, str_representer)
 #
 # Manifest name lookups
 class Lookup:
-    def __init__(self, pattern, group=None, version=None, kind=None, namespace=None):
-        self.pattern = pattern
+    def __init__(self, *, group=None, version=None, kind=None, namespace=None, pattern=None):
         self.group = group
         self.version = version
         self.kind = kind
         self.namespace = namespace
+        self.pattern = pattern
 
 def lookup_representer(dumper: yaml.SafeDumper, lookup: Lookup):
     return dumper.represent_mapping("!lookup", {
@@ -53,6 +53,40 @@ yaml.Dumper.add_representer(Lookup, lookup_representer)
 
 yaml.SafeLoader.add_constructor("!lookup", lookup_constructor)
 yaml.Loader.add_constructor("!lookup", lookup_constructor)
+
+class ManifestInfo:
+    def __init__(self, source):
+        util.validate(isinstance(source, (dict, Manifest)), "Invalid manifest passed to extract_metadata")
+
+        if isinstance(source, Manifest):
+            source = source.spec
+            util.validate(isinstance(source, dict), "Missing spec on Manifest object")
+
+        # api version
+        self.api_version = source.get("apiVersion", "")
+
+        # group and version
+        self.group = ""
+        self.version = ""
+        if self.api_version != "":
+            split = self.api_version.split("/")
+
+            if len(split) == 1:
+                self.version = split[0]
+            elif len(split) == 2:
+                self.group = split[0]
+                self.version = split[1]
+
+        # Kind
+        self.kind = source.get("kind", "")
+
+        # Name and Namespace
+        self.namespace = ""
+        self.name = ""
+        metadata = source.get("metadata")
+        if isinstance(metadata, dict):
+            self.name = metadata.get("name", "")
+            self.namespace = metadata.get("namespace", "")
 
 class Manifest:
     def __init__(self, source):
@@ -81,38 +115,14 @@ class Manifest:
         new_vars["kmt_tags"] = list(self.tags)
         new_vars["kmt_manifest"] = self.spec
 
-        # api version
-        api_version = self.spec.get("apiVersion", "")
+        info = ManifestInfo(self.spec)
 
-        # group and version
-        group = ""
-        version = ""
-        if api_version != "":
-            split = api_version.split("/")
-
-            if len(split) == 1:
-                version = split[0]
-            elif len(split) == 2:
-                group = split[0]
-                version = split[1]
-
-        # Kind
-        kind = self.spec.get("kind", "")
-
-        # Name and Namespace
-        namespace = ""
-        name = ""
-        metadata = self.spec.get("metadata")
-        if isinstance(metadata, dict):
-            name = metadata.get("name", "")
-            namespace = metadata.get("namespace", "")
-
-        new_vars["kmt_metadata_group"] = group
-        new_vars["kmt_metadata_version"] = version
-        new_vars["kmt_metadata_kind"] = kind
-        new_vars["kmt_metadata_namespace"] = namespace
-        new_vars["kmt_metadata_name"] = name
-        new_vars["kmt_metadata_api_version"] = api_version
+        new_vars["kmt_metadata_group"] = info.group
+        new_vars["kmt_metadata_version"] = info.version
+        new_vars["kmt_metadata_kind"] = info.kind
+        new_vars["kmt_metadata_namespace"] = info.namespace
+        new_vars["kmt_metadata_name"] = info.name
+        new_vars["kmt_metadata_api_version"] = info.api_version
 
         return new_vars
 

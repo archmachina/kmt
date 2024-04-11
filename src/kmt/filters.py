@@ -6,21 +6,16 @@ import re
 import yaml
 
 from . import types
+from . import util
 from .exception import PipelineRunException
 
 from jinja2 import pass_context
 
 logger = logging.getLogger(__name__)
 
-def filter_hash_string(value, name="sha1"):
+def filter_hash_string(value, hash_type="sha1"):
 
-    # Get a reference to the object to use for hashing
-    classref = getattr(hashlib, name)
-    instance = classref()
-
-    instance.update(str(value).encode("utf-8"))
-
-    return instance.hexdigest()
+    return util.hash_string(value, hash_type)
 
 def filter_base64_encode(value, encoding="utf-8"):
     bytes = base64.b64encode(str(value).encode(encoding))
@@ -79,45 +74,21 @@ def lookup_manifest(context, name, group=None, version=None, kind=None, namespac
     manifests = context.parent["kmt_manifests"]
     for manifest in manifests:
 
-        # api version
-        item_api_version = manifest.spec.get("apiVersion", "")
+        info = types.ManifestInfo(manifest.spec)
 
-        # group and version
-        item_group = ""
-        item_version = ""
-        if item_api_version != "":
-            split = item_api_version.split("/")
-
-            if len(split) == 1:
-                item_version = split[0]
-            elif len(split) == 2:
-                item_group = split[0]
-                item_version = split[1]
-
-        # Kind
-        item_kind = manifest.spec.get("kind", "")
-
-        # Name and Namespace
-        item_namespace = ""
-        item_name = ""
-        metadata = manifest.spec.get("metadata")
-        if isinstance(metadata, dict):
-            item_name = metadata.get("name", "")
-            item_namespace = metadata.get("namespace", "")
-
-        if group is not None and group != item_group:
+        if group is not None and group != info.group:
             continue
 
-        if version is not None and version != item_version:
+        if version is not None and version != info.version:
             continue
 
-        if kind is not None and kind != item_kind:
+        if kind is not None and kind != info.kind:
             continue
 
-        if namespace is not None and namespace != item_namespace:
+        if namespace is not None and namespace != info.namespace:
             continue
 
-        if name is not None and not re.search(name, item_name):
+        if name is not None and not re.search(name, info.name):
             continue
 
         matches.append(manifest.spec)
