@@ -14,7 +14,6 @@ from jinja2 import pass_context
 logger = logging.getLogger(__name__)
 
 def filter_hash_string(value, hash_type="sha1"):
-
     return util.hash_string(value, hash_type)
 
 def filter_base64_encode(value, encoding="utf-8"):
@@ -47,21 +46,13 @@ def filter_lookup_manifest(context, name, group=None, version=None, kind=None, n
 @pass_context
 def filter_hash_manifest(context, name, hash_type="sha1", group=None, version=None, kind=None, namespace=None):
 
-    # Get a reference to the object to use for hashing
-    classref = getattr(hashlib, hash_type)
-    instance = classref()
-
     # Retrieve the manifest
     manifest = lookup_manifest(context, name, group, version, kind, namespace, multiple=False)
 
     # Convert the manifest spec to byte encoding
     text = yaml.dump(manifest)
-    encode = text.encode("utf-8")
 
-    # Update the hash object with our yaml representation
-    instance.update(encode)
-
-    return instance.hexdigest()
+    return util.hash_string(text)
 
 def lookup_manifest(context, name, group=None, version=None, kind=None, namespace=None, multiple=False):
     if namespace is None:
