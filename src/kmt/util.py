@@ -50,16 +50,6 @@ def hash_object(source, hash_type="sha1"):
 
     return hash_string(text, hash_type=hash_type)
 
-def refresh_manifest_hash(manifest):
-    validate(isinstance(manifest, types.Manifest), "Invalid manifest passed to hash_manifest")
-
-    text = yaml.dump(manifest.spec)
-
-    manifest.vars["kmt_md5sum"] = hash_string(text, hash_type="md5", encoding="utf-8")
-    manifest.vars["kmt_sha1sum"] = hash_string(text, hash_type="sha1", encoding="utf-8")
-    manifest.vars["kmt_sha256sum"] = hash_string(text, hash_type="sha256", encoding="utf-8")
-    manifest.vars["kmt_shortsum"] = hash_string(text, hash_type="short8", encoding="utf-8")
-
 def lookup_manifest(manifests, *, group=None, version=None, kind=None, namespace=None, pattern=None, multiple=False):
     matches = []
 

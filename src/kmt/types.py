@@ -126,6 +126,15 @@ class Manifest:
 
         return new_vars
 
+    def refresh_hash(self):
+
+        text = yaml.dump(self.spec)
+
+        self.vars["kmt_md5sum"] = util.hash_string(text, hash_type="md5", encoding="utf-8")
+        self.vars["kmt_sha1sum"] = util.hash_string(text, hash_type="sha1", encoding="utf-8")
+        self.vars["kmt_sha256sum"] = util.hash_string(text, hash_type="sha256", encoding="utf-8")
+        self.vars["kmt_shortsum"] = util.hash_string(text, hash_type="short8", encoding="utf-8")
+
 class Common:
     def __init__(self):
         self.environment = jinja2.Environment()

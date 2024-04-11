@@ -19,7 +19,7 @@ class StepSupportRefreshHash(types.StepSupportHandler):
 
     def post(self):
         for manifest in self.state.working_manifests:
-            util.refresh_manifest_hash(manifest)
+            manifest.refresh_hash()
 
         logger.debug(f"RefreshHash: document short sum: {manifest.vars['shortsum']}")
 
