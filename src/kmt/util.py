@@ -50,7 +50,7 @@ def hash_object(source, hash_type="sha1"):
 
     return hash_string(text, hash_type=hash_type)
 
-def update_manifest_hash(manifest):
+def refresh_manifest_hash(manifest):
     validate(isinstance(manifest, types.Manifest), "Invalid manifest passed to hash_manifest")
 
     text = yaml.dump(manifest.spec)

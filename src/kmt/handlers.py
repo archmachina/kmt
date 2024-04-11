@@ -257,7 +257,7 @@ class StepHandlerRefreshHash(types.StepHandler):
 
     def run(self):
         for manifest in self.state.working_manifests:
-            util.update_manifest_hash(manifest)
+            util.refresh_manifest_hash(manifest)
 
             logger.debug(f"RefreshHash: manifest short sum: {manifest.vars['kmt_shortsum']}")
 
