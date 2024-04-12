@@ -7,6 +7,7 @@ import logging
 import re
 
 from . import util
+from kmt import yamlwrap
 
 from .exception import PipelineRunException
 
@@ -18,14 +19,6 @@ default_handlers = {}
 default_step_support_handlers = []
 default_pipeline_support_handlers = []
 default_filters = {}
-
-# Define a representer for pyyaml to format multiline strings as block quotes
-def str_representer(dumper, data):
-    if isinstance(data, str) and '\n' in data:
-        return dumper.represent_scalar("tag:yaml.org,2002:str", data, style="|")
-    return dumper.represent_scalar("tag:yaml.org,2002:str", data)
-
-yaml.add_representer(str, str_representer)
 
 #
 # Manifest name lookups
@@ -127,7 +120,7 @@ class Manifest:
         self.vars = {}
 
     def __str__(self):
-        output = yaml.dump(self.spec, explicit_start=True)
+        output = yamlwrap.dump(self.spec)
 
         return output
 

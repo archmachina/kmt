@@ -7,6 +7,7 @@ import re
 
 from . import exception
 from . import types
+from . import yamlwrap
 
 logger = logging.getLogger(__name__)
 
@@ -179,7 +180,7 @@ def coerce_value(types, val):
         if isinstance(val, str):
             try:
                 if parsed is None:
-                    parsed = yaml.safe_load(val)
+                    parsed = yamlwrap.load(val)
 
                 if isinstance(parsed, type_item):
                     return parsed

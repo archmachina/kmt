@@ -8,7 +8,7 @@ import sys
 
 from . import types
 from . import util
-from . import util
+from . import yamlwrap
 
 from .exception import PipelineRunException
 
@@ -111,7 +111,7 @@ class StepHandlerImport(types.StepHandler):
                     raise PipelineRunException("Could not template import text")
 
             # Load all documents from the file, after any templating
-            docs = [x for x in yaml.safe_load_all(content)]
+            docs = [x for x in yamlwrap.load_all(content)]
 
             for doc in docs:
                 manifest = types.Manifest(doc)
@@ -241,7 +241,7 @@ class StepHandlerStdin(types.StepHandler):
                 raise PipelineRunException("Could not template import text")
 
         # Load all documents from the file, after any templating
-        docs = [x for x in yaml.safe_load_all(content)]
+        docs = [x for x in yamlwrap.load_all(content)]
 
         for doc in docs:
             manifest = types.Manifest(doc)
