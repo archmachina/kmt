@@ -24,6 +24,8 @@ def hash_string(source, hash_type="sha1", encoding="utf-8"):
     if hash_type == "short8" or hash_type == "short10":
         method = "sha256"
 
+    validate(method in ["md5", "sha256", "sha1"], f"Invalid hashing method supplied: {method}")
+
     # Get a reference to the object to use for hashing
     classref = getattr(hashlib, method)
     instance = classref()
