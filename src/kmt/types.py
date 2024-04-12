@@ -4,6 +4,7 @@ import jinja2
 import inspect
 import copy
 import logging
+import re
 
 from . import util
 
@@ -29,64 +30,92 @@ yaml.add_representer(str, str_representer)
 #
 # Manifest name lookups
 class Lookup:
-    def __init__(self, *, group=None, version=None, kind=None, namespace=None, pattern=None):
-        self.group = group
-        self.version = version
-        self.kind = kind
-        self.namespace = namespace
-        self.pattern = pattern
+    def __init__(self, spec):
+        util.validate(isinstance(spec, dict), "Invalid specification passed to Lookup")
+
+        self.spec = spec.copy()
+
+        allowed_keys = [
+            "group",
+            "version",
+            "kind",
+            "api_version",
+            "namespace",
+            "pattern"
+        ]
+
+        errored = []
+        for key in self.spec.keys():
+            if key not in allowed_keys or not isinstance(self.spec[key], str):
+                errored.append(key)
+
+        if len(errored) > 0:
+            raise PipelineRunException(f"Invalid keys or invalid key value found on lookup: {errored}")
+
+    def find_matches(self, manifests, *, current_namespace=None):
+        return self._find(manifests, multiple=True, current_namespace=current_namespace)
+
+    def find_match(self, manifests, *, current_namespace=None):
+        return self._find(manifests, multiple=False, current_namespace=current_namespace)
+
+    def _find(self, manifests, *, multiple, current_namespace=None):
+        util.validate(isinstance(manifests, list) and all(isinstance(x, Manifest) for x in manifests),
+            "Invalid manifests provided to Lookup find")
+
+        matches = []
+
+        for manifest in manifests:
+
+            info = util.extract_manifest_info(manifest)
+
+            if "group" in self.spec and self.spec["group"] != info["group"]:
+                continue
+
+            if "version" in self.spec and self.spec["version"] != info["version"]:
+                continue
+
+            if "kind" in self.spec and self.spec["kind"] != info["kind"]:
+                continue
+
+            if "api_version" in self.spec and self.spec["api_version"] != info["api_version"]:
+                continue
+
+            if "namespace" in self.spec:
+                if self.spec["namespace"] != info["namespace"]:
+                    continue
+            elif info["namespace"] is not None and info["namespace"] != current_namespace:
+                # If no namespace has been defined in the lookup, we will match on
+                # the current namespace and any resource without a namespace.
+                continue
+
+            if "pattern" in self.spec and not re.search(self.spec["pattern"], info["name"]):
+                continue
+
+            matches.append(manifest)
+
+        if multiple:
+            return matches
+
+        if len(matches) == 0:
+            raise PipelineRunException("Could not find a matching object for Lookup find")
+
+        if len(matches) > 1:
+            raise PipelineRunException("Could not find a single object for Lookup find. Multiple object matches")
+
+        return matches[0]
+
 
 def lookup_representer(dumper: yaml.SafeDumper, lookup: Lookup):
-    return dumper.represent_mapping("!lookup", {
-        "group": lookup.group,
-        "version": lookup.version,
-        "kind": lookup.kind,
-        "namespace": lookup.namespace,
-        "pattern": lookup.pattern
-    })
+    return dumper.represent_mapping("!lookup", lookup.spec)
 
 def lookup_constructor(loader: yaml.SafeLoader, node: yaml.nodes.MappingNode):
-    return Lookup(**loader.construct_mapping(node))
+    return Lookup(spec=loader.construct_mapping(node))
 
 yaml.SafeDumper.add_representer(Lookup, lookup_representer)
 yaml.Dumper.add_representer(Lookup, lookup_representer)
 
 yaml.SafeLoader.add_constructor("!lookup", lookup_constructor)
 yaml.Loader.add_constructor("!lookup", lookup_constructor)
-
-class ManifestInfo:
-    def __init__(self, source):
-        util.validate(isinstance(source, (dict, Manifest)), "Invalid manifest passed to extract_metadata")
-
-        if isinstance(source, Manifest):
-            source = source.spec
-            util.validate(isinstance(source, dict), "Missing spec on Manifest object")
-
-        # api version
-        self.api_version = source.get("apiVersion", "")
-
-        # group and version
-        self.group = ""
-        self.version = ""
-        if self.api_version != "":
-            split = self.api_version.split("/")
-
-            if len(split) == 1:
-                self.version = split[0]
-            elif len(split) == 2:
-                self.group = split[0]
-                self.version = split[1]
-
-        # Kind
-        self.kind = source.get("kind", "")
-
-        # Name and Namespace
-        self.namespace = ""
-        self.name = ""
-        metadata = source.get("metadata")
-        if isinstance(metadata, dict):
-            self.name = metadata.get("name", "")
-            self.namespace = metadata.get("namespace", "")
 
 class Manifest:
     def __init__(self, source):
@@ -115,14 +144,14 @@ class Manifest:
         new_vars["kmt_tags"] = list(self.tags)
         new_vars["kmt_manifest"] = self.spec
 
-        info = ManifestInfo(self.spec)
+        info = util.extract_manifest_info(self.spec, default_value="")
 
-        new_vars["kmt_metadata_group"] = info.group
-        new_vars["kmt_metadata_version"] = info.version
-        new_vars["kmt_metadata_kind"] = info.kind
-        new_vars["kmt_metadata_namespace"] = info.namespace
-        new_vars["kmt_metadata_name"] = info.name
-        new_vars["kmt_metadata_api_version"] = info.api_version
+        new_vars["kmt_metadata_group"] = info["group"]
+        new_vars["kmt_metadata_version"] = info["version"]
+        new_vars["kmt_metadata_kind"] = info["kind"]
+        new_vars["kmt_metadata_api_version"] = info["api_version"]
+        new_vars["kmt_metadata_namespace"] = info["namespace"]
+        new_vars["kmt_metadata_name"] = info["name"]
 
         return new_vars
 
@@ -358,14 +387,14 @@ class Pipeline:
                         if isinstance(current[key], (dict, list)):
                             item_list.append(current[key])
                         else:
-                            current[key] = self._resolve_reference(current[key])
+                            current[key] = self._resolve_reference(manifest, current[key])
                 elif isinstance(current, list):
                     index = 0
                     while index < len(current):
                         if isinstance(current[index], (dict, list)):
                             item_list.append(current[index])
                         else:
-                            current[index] = self._resolve_reference(current[index])
+                            current[index] = self._resolve_reference(manifest, current[index])
 
                         index = index + 1
                 else:
@@ -375,12 +404,16 @@ class Pipeline:
 
         return manifests
 
-    def _resolve_reference(self, item):
+    def _resolve_reference(self, current_manifest, item):
         if isinstance(item, Lookup):
-            manifest = util.lookup_manifest(self.manifests, pattern=item.pattern,
-                group=item.group, version=item.version, kind=item.kind, namespace=item.namespace, multiple=False)
+            current_namespace = None
+            metadata = current_manifest.spec.get('metadata')
+            if metadata is not None:
+                current_namespace = metadata.get("namespace")
 
-            metadata = manifest.get("metadata")
+            manifest = item.find_match(self.manifests, current_namespace=current_namespace)
+
+            metadata = manifest.spec.get("metadata")
             util.validate(isinstance(metadata, dict), f"Invalid metadata on object in _resolve_reference: {type(metadata)}")
 
             name = metadata.get("name")

@@ -50,37 +50,48 @@ def hash_object(source, hash_type="sha1"):
 
     return hash_string(text, hash_type=hash_type)
 
-def lookup_manifest(manifests, *, group=None, version=None, kind=None, namespace=None, pattern=None, multiple=False):
-    matches = []
+def extract_manifest_info(manifest, default_value=None):
+    validate(isinstance(manifest, (dict, types.Manifest)), "Invalid manifest supplied to extract_manifest_info")
 
-    for manifest in manifests:
+    if isinstance(manifest, types.Manifest):
+        manifest = manifest.spec
 
-        info = types.ManifestInfo(manifest.spec)
+    # api version
+    # Don't use the 'default_value' yet as we want to know whether it exists first
+    api_version = manifest.get("apiVersion")
 
-        if group is not None and group != info.group:
-            continue
+    # group and version
+    group = default_value
+    version = default_value
+    if isinstance(api_version, str) and api_version != "":
+        split = api_version.split("/")
 
-        if version is not None and version != info.version:
-            continue
+        if len(split) == 1:
+            version = split[0]
+        elif len(split) == 2:
+            group = split[0]
+            version = split[1]
 
-        if kind is not None and kind != info.kind:
-            continue
+    # Update the api_version to the default, if it didn't exist or was None
+    if api_version is None:
+        api_version = default_value
 
-        if namespace is not None and namespace != info.namespace:
-            continue
+    # Kind
+    kind = manifest.get("kind", default_value)
 
-        if pattern is not None and not re.search(pattern, info.name):
-            continue
+    # Name and Namespace
+    namespace = default_value
+    name = default_value
+    metadata = manifest.get("metadata")
+    if isinstance(metadata, dict):
+        name = metadata.get("name", default_value)
+        namespace = metadata.get("namespace", default_value)
 
-        matches.append(manifest.spec)
-
-    if len(matches) == 0:
-        raise exception.PipelineRunException("Could not find a matching object for lookup_manifest")
-
-    if multiple:
-        return matches
-
-    if len(matches) > 1:
-        raise exception.PipelineRunException("Could not find a single object for lookup_manifest. Multiple object matches")
-
-    return matches[0]
+    return {
+        "group": group,
+        "version": version,
+        "kind": kind,
+        "api_version": api_version,
+        "namespace": namespace,
+        "name": name
+    }

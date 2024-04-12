@@ -34,66 +34,49 @@ def filter_json_escape(value):
     return (json.dumps(str(value)))[1:-1]
 
 @pass_context
-def filter_lookup_manifest_name(context, name, group=None, version=None, kind=None, namespace=None):
-    item = lookup_manifest(context, name, group, version, kind, namespace, multiple=False)
+def filter_lookup_manifest_name(context, pattern: str, spec:dict=None):
 
-    return item["metadata"]["name"]
+    if spec is None:
+        spec = {}
+    spec["pattern"] = pattern
+
+    item = lookup_manifest(context, spec)
+
+    return item.spec["metadata"]["name"]
 
 @pass_context
-def filter_lookup_manifest(context, name, group=None, version=None, kind=None, namespace=None, multiple=False):
-    return lookup_manifest(context, name, group, version, kind, namespace, multiple)
+def filter_lookup_manifest(context, pattern: str, spec:dict=None):
+
+    if spec is None:
+        spec = {}
+    spec["pattern"] = pattern
+
+    item = lookup_manifest(context, spec)
+
+    return item.spec
 
 @pass_context
-def filter_hash_manifest(context, name, hash_type="sha1", group=None, version=None, kind=None, namespace=None):
+def filter_hash_manifest(context, pattern: str, spec:dict=None, hash_type:str="sha1"):
+
+    if spec is None:
+        spec = {}
+    spec["pattern"] = pattern
 
     # Retrieve the manifest
-    manifest = lookup_manifest(context, name, group, version, kind, namespace, multiple=False)
+    item = lookup_manifest(context, spec)
 
     # Convert the manifest spec to byte encoding
-    text = yaml.dump(manifest)
+    text = yaml.dump(item.spec)
 
-    return util.hash_string(text)
+    return util.hash_string(text, hash_type=hash_type)
 
-def lookup_manifest(context, name, group=None, version=None, kind=None, namespace=None, multiple=False):
-    if namespace is None:
-        namespace = context.parent.get("kmt_namespace")
+def lookup_manifest(context, spec):
+    lookup = types.Lookup(spec)
 
-    matches = []
+    item = lookup.find_match(context.parent["kmt_manifests"],
+        current_namespace=context.parent.get("kmt_namespace"))
 
-    # raise Exception(f"Keys: {context.parent.keys()}")
-
-    manifests = context.parent["kmt_manifests"]
-    for manifest in manifests:
-
-        info = types.ManifestInfo(manifest.spec)
-
-        if group is not None and group != info.group:
-            continue
-
-        if version is not None and version != info.version:
-            continue
-
-        if kind is not None and kind != info.kind:
-            continue
-
-        if namespace is not None and namespace != info.namespace:
-            continue
-
-        if name is not None and not re.search(name, info.name):
-            continue
-
-        matches.append(manifest.spec)
-
-    if len(matches) == 0:
-        raise PipelineRunException("Could not find a matching object for lookup_manifest")
-
-    if multiple:
-        return matches
-
-    if len(matches) > 1:
-        raise PipelineRunException("Could not find a single object for lookup_manifest. Multiple object matches")
-
-    return matches[0]
+    return item
 
 types.default_filters["hash_string"] = filter_hash_string
 types.default_filters["b64encode"] = filter_base64_encode
