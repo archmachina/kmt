@@ -26,10 +26,10 @@ class StepSupportRefreshHash(types.StepSupportHandler):
 class StepSupportWhen(types.StepSupportHandler):
     def extract(self, step_def):
         # When condition
-        self.when = self.state.spec_util.extract_property(step_def, "when", default=[])
+        self.when = util.extract_property(step_def, "when", default=[])
 
         # Filter condition
-        self.filter = self.state.spec_util.extract_property(step_def, "filter", default=[])
+        self.filter = util.extract_property(step_def, "filter", default=[])
 
     def pre(self):
         working_manifests = self.state.working_manifests.copy()
@@ -67,16 +67,16 @@ class StepSupportWhen(types.StepSupportHandler):
 class StepSupportTags(types.StepSupportHandler):
     def extract(self, step_def):
         # Extract match any tags
-        self.match_any_tags = self.state.spec_util.extract_property(step_def, "match_any_tags", default=[])
+        self.match_any_tags = util.extract_property(step_def, "match_any_tags", default=[])
 
         # Extract match all tags
-        self.match_all_tags = self.state.spec_util.extract_property(step_def, "match_all_tags", default=[])
+        self.match_all_tags = util.extract_property(step_def, "match_all_tags", default=[])
 
         # Extract exclude tags
-        self.exclude_tags = self.state.spec_util.extract_property(step_def, "exclude_tags", default=[])
+        self.exclude_tags = util.extract_property(step_def, "exclude_tags", default=[])
 
         # Apply tags
-        self.apply_tags = self.state.spec_util.extract_property(step_def, "apply_tags", default=[])
+        self.apply_tags = util.extract_property(step_def, "apply_tags", default=[])
 
     def pre(self):
         working_manifests = self.state.working_manifests.copy()
@@ -123,15 +123,15 @@ class StepSupportTags(types.StepSupportHandler):
 
 class StepSupportMetadata(types.StepSupportHandler):
     def extract(self, step_def):
-        self.match_group = self.state.spec_util.extract_property(step_def, "match_group")
+        self.match_group = util.extract_property(step_def, "match_group")
 
-        self.match_version = self.state.spec_util.extract_property(step_def, "match_version")
+        self.match_version = util.extract_property(step_def, "match_version")
 
-        self.match_kind = self.state.spec_util.extract_property(step_def, "match_kind")
+        self.match_kind = util.extract_property(step_def, "match_kind")
 
-        self.match_namespace = self.state.spec_util.extract_property(step_def, "match_namespace")
+        self.match_namespace = util.extract_property(step_def, "match_namespace")
 
-        self.match_name = self.state.spec_util.extract_property(step_def, "match_name")
+        self.match_name = util.extract_property(step_def, "match_name")
 
     def pre(self):
         working_manifests = self.state.working_manifests.copy()

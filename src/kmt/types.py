@@ -313,25 +313,25 @@ class Pipeline:
 
         # Config defaults - vars that can be overridden by the supplied vars
         # Don't template the vars - These will be templated when processed in a step
-        config_defaults = spec_util.extract_property(pipeline_spec, "defaults", default={})
+        config_defaults = util.extract_property(pipeline_spec, "defaults", default={})
         config_defaults = spec_util.resolve(config_defaults, dict, template=False)
         util.validate(isinstance(config_defaults, dict), "Config 'defaults' is not a dictionary")
 
         # Config vars - vars that can't be overridden
         # Don't template the vars - These will be templated when processed in a step
-        config_vars = spec_util.extract_property(pipeline_spec, "vars", default={})
+        config_vars = util.extract_property(pipeline_spec, "vars", default={})
         config_vars = spec_util.resolve(config_vars, dict, template=False)
         util.validate(isinstance(config_vars, dict), "Config 'vars' is not a dictionary")
 
         # Pipeline - list of the steps to run for this pipeline
         # Don't template the pipeline steps - These will be templated when they are executed
-        config_pipeline = spec_util.extract_property(pipeline_spec, "pipeline", default=[])
+        config_pipeline = util.extract_property(pipeline_spec, "pipeline", default=[])
         config_pipeline = spec_util.resolve(config_pipeline, list, template=False)
         util.validate(isinstance(config_pipeline, list), "Config 'pipeline' is not a list")
         self.pipeline_steps = config_pipeline
 
         # Accept manifests - whether to include incoming manifests in pipeline processing
-        accept_manifests = spec_util.extract_property(pipeline_spec, "accept_manifests", default=False)
+        accept_manifests = util.extract_property(pipeline_spec, "accept_manifests", default=False)
         accept_manifests = spec_util.resolve(accept_manifests, bool)
         util.validate(isinstance(accept_manifests, bool), "Invalid type for accept_manifests")
 
@@ -364,43 +364,10 @@ class Pipeline:
         # Run the pipeline and capture any manifests, without resolving lookups
         manifests = self.run_no_resolve()
 
+        # Call _resolve_reference for all nodes in the manifest to see if replacement
+        # is required
         for manifest in manifests:
-            visited = set()
-            item_list = [manifest.spec]
-
-            while len(item_list) > 0:
-                if len(item_list) > 10000:
-                    raise PipelineRunException("Potential recursive loop while templating")
-
-                current = item_list.pop()
-
-                # Check if we've seen this object before
-                if id(current) in visited:
-                    continue
-
-                # Save this to the visited list, so we don't revisit again, if there is a loop
-                # in the origin object
-                visited.add(id(current))
-
-                if isinstance(current, dict):
-                    for key in current:
-                        if isinstance(current[key], (dict, list)):
-                            item_list.append(current[key])
-                        else:
-                            current[key] = self._resolve_reference(manifest, current[key])
-                elif isinstance(current, list):
-                    index = 0
-                    while index < len(current):
-                        if isinstance(current[index], (dict, list)):
-                            item_list.append(current[index])
-                        else:
-                            current[index] = self._resolve_reference(manifest, current[index])
-
-                        index = index + 1
-                else:
-                    # Anything non dictionary or list should never have ended up in this list, so this
-                    # is really an internal error
-                    raise PipelineRunException(f"Invalid type for resolve in pipeline run: {type(current)}")
+            util.walk_object(manifest.spec, lambda x: self._resolve_reference(manifest, x))
 
         return manifests
 
@@ -472,7 +439,7 @@ class Pipeline:
             # Extract the step config and allow it to be templated with vars defined up to this
             # point
             spec_util = SpecUtil(self.common.environment, state.vars)
-            step_inner = spec_util.extract_property(step_outer, step_type, default={})
+            step_inner = util.extract_property(step_outer, step_type, default={})
             step_inner = spec_util.resolve(step_inner, (dict, type(None)))
             if step_inner is None:
                 step_inner = {}
@@ -573,85 +540,6 @@ class SpecUtil:
 
         raise PipelineRunException(f"Reached recursion limit for string template '{val}'")
 
-    def extract_property(self, spec, key, /, default=None, required=False):
-        if not isinstance(spec, dict):
-            raise PipelineRunException("Invalid spec passed to extract_property. Must be dict")
-
-        if key not in spec:
-            # Raise exception is the key isn't present, but required
-            if required:
-                raise KeyError(f'Missing key "{key}" in spec or value is null')
-
-            # If the key is not present, return the default
-            return default
-
-        # Retrieve value
-        val = spec.pop(key)
-
-        return val
-
-    def parse_bool(self, obj) -> bool:
-        if obj is None:
-            raise PipelineRunException("None value passed to parse_bool")
-
-        if isinstance(obj, bool):
-            return obj
-
-        obj = str(obj)
-
-        if obj.lower() in ["true", "1"]:
-            return True
-
-        if obj.lower() in ["false", "0"]:
-            return False
-
-        raise PipelineRunException(f"Unparseable value ({obj}) passed to parse_bool")
-
-    def coerce_value(self, types, val):
-        if types is None:
-            # Nothing to do here
-            return val
-
-        if isinstance(types, type):
-            types = (types,)
-
-        util.validate(isinstance(types, tuple) and all(isinstance(x, type) for x in types),
-            "Invalid types passed to coerce_value")
-
-        parsed = None
-
-        for type_item in types:
-            # Return val if it is already the correct type
-            if isinstance(val, type_item):
-                return val
-
-            if type_item == bool:
-                try:
-                    result = self.parse_bool(val)
-                    return result
-                except:
-                    pass
-            elif type_item == str:
-                if val is None:
-                    # Don't convert None to string. This is likely not wanted.
-                    continue
-
-                return str(val)
-
-            # None of the above have worked, try parsing as yaml to see if it
-            # becomes the correct type
-            if isinstance(val, str):
-                try:
-                    if parsed is None:
-                        parsed = yaml.safe_load(val)
-
-                    if isinstance(parsed, type_item):
-                        return parsed
-                except yaml.YAMLError as e:
-                    pass
-
-        raise PipelineRunException(f"Could not convert value to target types: {types}")
-
     def resolve(self, value, types, /, template=True, recursive=False, var_override=None):
         util.validate(isinstance(template, bool), "Invalid value for template passed to resolve")
 
@@ -662,7 +550,7 @@ class SpecUtil:
             else:
                 value = self.template_if_string(value, var_override=var_override)
 
-        value = self.coerce_value(types, value)
+        value = util.coerce_value(types, value)
 
         return value
 
@@ -671,46 +559,7 @@ class SpecUtil:
         # Potentially convert a string to a dict or list type
         item = self.template_if_string(item, var_override=var_override)
 
-        # If the item is still not a dict or list, just return it
-        # This may still have converted the item (e.g. string -> bool)
-        if not isinstance(item, (dict, list)):
-            return item
-
-        visited = set()
-        item_list = [item]
-
-        while len(item_list) > 0:
-            if len(item_list) > 10000:
-                raise PipelineRunException("Potential recursive loop while templating")
-
-            current = item_list.pop()
-
-            # Check if we've seen this object before
-            if id(current) in visited:
-                continue
-
-            # Save this to the visited list, so we don't revisit again, if there is a loop
-            # in the origin object
-            visited.add(id(current))
-
-            if isinstance(current, dict):
-                for key in current:
-                    if isinstance(current[key], (dict, list)):
-                        item_list.append(current[key])
-                    else:
-                        current[key] = self.template_if_string(current[key], var_override=var_override)
-            elif isinstance(current, list):
-                index = 0
-                while index < len(current):
-                    if isinstance(current[index], (dict, list)):
-                        item_list.append(current[index])
-                    else:
-                        current[index] = self.template_if_string(current[index], var_override=var_override)
-
-                    index = index + 1
-            else:
-                # Anything non dictionary or list should never have ended up in this list, so this
-                # is really an internal error
-                raise PipelineRunException(f"Invalid type for templating in recursive_template: {type(current)}")
+        # Walk the object and template anything that is a string
+        item = util.walk_object(item, lambda x: self.template_if_string(x, var_override=var_override))
 
         return item

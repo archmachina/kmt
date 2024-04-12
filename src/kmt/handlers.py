@@ -19,11 +19,11 @@ class StepHandlerPipeline(types.StepHandler):
     """
     def extract(self, step_def):
         # Path to other pipeline
-        self.path = self.state.spec_util.extract_property(step_def, "path")
+        self.path = util.extract_property(step_def, "path")
 
-        self.vars = self.state.spec_util.extract_property(step_def, "vars", default={})
+        self.vars = util.extract_property(step_def, "vars", default={})
 
-        self.pass_manifests = self.state.spec_util.extract_property(step_def, "pass_manifests", default=False)
+        self.pass_manifests = util.extract_property(step_def, "pass_manifests", default=False)
 
     def run(self):
         spec_util = self.state.spec_util
@@ -72,11 +72,11 @@ class StepHandlerImport(types.StepHandler):
     """
     """
     def extract(self, step_def):
-        self.import_files = self.state.spec_util.extract_property(step_def, "files")
+        self.import_files = util.extract_property(step_def, "files")
 
-        self.recursive = self.state.spec_util.extract_property(step_def, "recursive", default=False)
+        self.recursive = util.extract_property(step_def, "recursive", default=False)
 
-        self.template = self.state.spec_util.extract_property(step_def, "template", default=True)
+        self.template = util.extract_property(step_def, "template", default=True)
 
     def run(self):
         spec_util = self.state.spec_util
@@ -124,9 +124,9 @@ class StepHandlerVars(types.StepHandler):
     """
     """
     def extract(self, step_def):
-        self.pipeline_var_list = self.state.spec_util.extract_property(step_def, "pipeline", default=[])
+        self.pipeline_var_list = util.extract_property(step_def, "pipeline", default=[])
 
-        self.manifest_var_list = self.state.spec_util.extract_property(step_def, "manifest", default=[])
+        self.manifest_var_list = util.extract_property(step_def, "manifest", default=[])
 
     def run(self):
         working_manifests = self.state.working_manifests.copy()
@@ -140,8 +140,8 @@ class StepHandlerVars(types.StepHandler):
             for var_spec in pipeline_var_list:
                 # Extract vars
                 var_spec = var_spec.copy()
-                key = self.state.spec_util.extract_property(var_spec, "key")
-                value = self.state.spec_util.extract_property(var_spec, "value")
+                key = util.extract_property(var_spec, "key")
+                value = util.extract_property(var_spec, "value")
                 util.validate(len(var_spec.keys()) == 0, f"Unknown properties on vars spec: {var_spec.keys()}")
 
                 # Resolve any templating and type
@@ -164,9 +164,9 @@ class StepHandlerVars(types.StepHandler):
                 for var_spec in manifest_var_list:
                     # Extract vars
                     var_spec = var_spec.copy()
-                    key = self.state.spec_util.extract_property(var_spec, "key")
-                    value = self.state.spec_util.extract_property(var_spec, "value")
-                    set_pipeline = self.state.spec_util.extract_property(var_spec, "pipeline", default=False)
+                    key = util.extract_property(var_spec, "key")
+                    value = util.extract_property(var_spec, "value")
+                    set_pipeline = util.extract_property(var_spec, "pipeline", default=False)
                     util.validate(len(var_spec.keys()) == 0, f"Unknown properties on vars spec: {var_spec.keys()}")
 
                     # Resolve any templating and type
@@ -185,9 +185,9 @@ class StepHandlerVars(types.StepHandler):
 #     """
 #     """
 #     def extract(self, step_def):
-#         self.items = self.state.spec_util.extract_property(step_def, "items")
+#         self.items = util.extract_property(step_def, "items")
 
-#         self.regex = self.state.spec_util.extract_property(step_def, "regex", default=False)
+#         self.regex = util.extract_property(step_def, "regex", default=False)
 
 #     def run(self):
 #         working_manifests = self.state.working_manifests.copy()
@@ -203,13 +203,13 @@ class StepHandlerVars(types.StepHandler):
 #                 # Copy the dictionary as we'll change it when removing values
 #                 replace_item = replace_item.copy()
 
-#                 replace_key = spec_util.extract_property(replace_item, "key")
+#                 replace_key = util.extract_property(replace_item, "key")
 #                 replace_key = spec_util.resolve(replace_key, str)
 
-#                 replace_value = spec_util.extract_property(replace_item, "value")
+#                 replace_value = util.extract_property(replace_item, "value")
 #                 replace_value = spec_util.resolve(replace_value, str)
 
-#                 replace_regex = spec_util.extract_property(replace_item, "regex", default=False)
+#                 replace_regex = util.extract_property(replace_item, "regex", default=False)
 #                 replace_regex = spec_util.resolve(replace_regex, bool)
 
 #                 logger.debug(f"replace: replacing regex({regex or replace_regex}): {replace_key} -> {replace_value}")
@@ -224,7 +224,7 @@ class StepHandlerStdin(types.StepHandler):
     """
     def extract(self, step_def):
 
-        self.template = self.state.spec_util.extract_property(step_def, "template", default=True)
+        self.template = util.extract_property(step_def, "template", default=True)
 
     def run(self):
         spec_util = self.state.spec_util
@@ -263,7 +263,7 @@ class StepHandlerRefreshHash(types.StepHandler):
 
 class StepHandlerJsonPatch(types.StepHandler):
     def extract(self, step_def):
-        self.patches = self.state.spec_util.extract_property(step_def, "patches")
+        self.patches = util.extract_property(step_def, "patches")
 
     def run(self):
         working_manifests = self.state.working_manifests.copy()
@@ -293,13 +293,13 @@ class StepHandlerDelete(types.StepHandler):
 
 class StepHandlerMetadata(types.StepHandler):
     def extract(self, step_def):
-        self.name = self.state.spec_util.extract_property(step_def, "name")
+        self.name = util.extract_property(step_def, "name")
 
-        self.namespace = self.state.spec_util.extract_property(step_def, "namespace")
+        self.namespace = util.extract_property(step_def, "namespace")
 
-        self.annotations = self.state.spec_util.extract_property(step_def, "annotations")
+        self.annotations = util.extract_property(step_def, "annotations")
 
-        self.labels = self.state.spec_util.extract_property(step_def, "labels")
+        self.labels = util.extract_property(step_def, "labels")
 
     def run(self):
         working_manifests = self.state.working_manifests.copy()
