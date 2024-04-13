@@ -9,7 +9,9 @@ import re
 from . import util
 from kmt import yamlwrap
 
+from . import exception
 from .exception import PipelineRunException
+from jinja2.meta import find_undeclared_variables
 
 logger = logging.getLogger(__name__)
 
@@ -352,6 +354,9 @@ class Pipeline:
         for key in config_vars:
             self.vars[key] = config_vars[key]
 
+        # Built in vars - override anything else defined
+        self.vars["env"] = os.environ.copy()
+
     def run(self):
 
         # Run the pipeline and capture any manifests, without resolving lookups
@@ -401,7 +406,6 @@ class Pipeline:
 
             # Create a common state used by each support handler and handler
             step_vars = copy.deepcopy(self.vars)
-            step_vars["env"] = os.environ.copy()
             step_vars["kmt_manifests"] = self.manifests
 
             state = PipelineStepState(pipeline=self, step_vars=step_vars,
@@ -491,13 +495,15 @@ class SpecUtil:
         # Define the template vars
         # Don't copy the template vars, just reference it. These vars may be changed elsewhere
         # and shouldn't need to be reimported or altered within the SpecUtil
-        self.vars = template_vars
+        self._unresolved_vars = template_vars
+        self.vars = copy.deepcopy(template_vars)
+        self._resolve_var_refs()
 
     def new_scope(self, new_vars):
         util.validate(isinstance(new_vars, dict), "Invalid new_vars passed to new_scope")
 
         # Create a new set of vars
-        working_vars = self.vars.copy()
+        working_vars = self._unresolved_vars.copy()
         for key in new_vars:
             working_vars[key] = new_vars[key]
 
@@ -505,9 +511,10 @@ class SpecUtil:
 
         return new_spec_util
 
-    def template_if_string(self, val, var_override=None):
-        if var_override is not None and not isinstance(var_override, dict):
-            raise PipelineRunException("Invalid var override passed to template_if_string")
+    def template_if_string(self, val, var_override=None, limit=30):
+        util.validate(isinstance(var_override, dict) or var_override is None,
+            "Invalid var_override passed to template_if_string")
+        util.validate(isinstance(limit, int) and limit > 0, "Invalid limit passed to template_if_string")
 
         # Determine which vars will be used for templating
         template_vars = self.vars
@@ -518,11 +525,11 @@ class SpecUtil:
             return val
         
         # Perform at most 'count' passes of the string
-        count = 30
+        count = 0
         current = val
 
-        while count > 0:
-            count = count - 1
+        while count < limit:
+            count = count + 1
 
             template = self._environment.from_string(current)
             output = template.render(template_vars)
@@ -556,3 +563,50 @@ class SpecUtil:
         item = util.walk_object(item, lambda x: self.template_if_string(x, var_override=var_override))
 
         return item
+
+    def _resolve_var_refs(self):
+        """
+        Performs templating on the source dictionary and attempts to resolve variable references
+        taking in to account nested references
+        """
+
+        var_map = {}
+
+        # Create a map of keys to the vars the value references
+        for key in self.vars:
+            deps = set()
+
+            # TODO: Change to use walk object to find all referenced under this
+            # key
+            if isinstance(self.vars[key], str):
+                ast = self._environment.parse(self.vars[key])
+                deps = set(find_undeclared_variables(ast))
+
+            var_map[key] = deps
+
+        # Loop while there are values left in var_map, which represents the key/value
+        # and the vars it depends on
+        while len(var_map.keys()) > 0:
+            process_list = []
+
+            # Add any keys to the process list that don't have any dependencies left
+            for key in var_map:
+                if len(var_map[key]) == 0:
+                    process_list.append(key)
+
+            # Remove the items we're processing from the var map
+            for key in process_list:
+                var_map.pop(key)
+
+            # Fail if there is nothing to process
+            if len(process_list) < 1:
+                raise exception.KMTResolveException("Circular or unresolvable variable references")
+
+            for prockey in process_list:
+                # Template the variable and update 'new_vars'
+                self.vars[prockey] = self.template_if_string(self.vars[prockey])
+
+                # Remove the variable as a dependency for all other variables
+                for key in var_map:
+                    if prockey in var_map[key]:
+                        var_map[key].remove(prockey)

@@ -7,7 +7,8 @@ def str_representer(dumper, data):
         return dumper.represent_scalar("tag:yaml.org,2002:str", data, style="|")
     return dumper.represent_scalar("tag:yaml.org,2002:str", data)
 
-yaml.add_representer(str, str_representer)
+yaml.SafeDumper.add_representer(str, str_representer)
+yaml.Dumper.add_representer(str, str_representer)
 
 def dump(source):
     dumper = yaml.SafeDumper
@@ -16,6 +17,8 @@ def dump(source):
 
 def dump_all(source):
     dumper = yaml.SafeDumper
+
+    dumper.add_representer(str, str_representer)
 
     return yaml.dump_all(source, Dumper=dumper, explicit_start=True, sort_keys=False, indent=2)
 

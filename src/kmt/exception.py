@@ -33,3 +33,8 @@ class KMTConversionException(Exception):
     """
     Error performing type conversion
     """
+
+class KMTResolveException(Exception):
+    """
+    Error resolving variable references
+    """

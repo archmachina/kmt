@@ -3,7 +3,7 @@ import logging
 import hashlib
 import textwrap
 import yaml
-import re
+import jinja2
 
 from . import exception
 from . import types
@@ -104,6 +104,8 @@ def walk_object(object, callback):
     validate(callable(callback), "Invalid callback supplied to walk_object")
 
     if not isinstance(object, (dict, list)):
+        # Still call the callback for the top level object
+        callback(object)
         return object
 
     visited = set()
