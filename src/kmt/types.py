@@ -585,15 +585,14 @@ class SpecUtil:
         for key in self.vars:
             deps = set()
 
-            # TODO: Change to use walk object to find all referenced under this
-            # key
-            if isinstance(self.vars[key], str):
-                ast = self._environment.parse(self.vars[key])
-                deps = set(find_undeclared_variables(ast))
-
             # Recursively walk through all properties for the object and calculate a set
             # of dependencies
-            # util.walk_object(self.vars[key], lambda x: deps.union(self._get_template_str_vars(x)))
+            # It's possible that some dependencies could be resolvable, but will show as unresolvable here:
+            # If a.b depends on x.y, and x.x depends on a.a, it could, in theory, be resolved, but this will
+            # show it as unresolvable.
+            # Since we don't have access to that info from jinja2 easily, it would be difficult to calculate
+            # and offers little value being a small edge case.
+            util.walk_object(self.vars[key], lambda x: deps.update(self._get_template_str_vars(x)))
 
             var_map[key] = deps
 
