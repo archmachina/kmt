@@ -99,9 +99,10 @@ def extract_manifest_info(manifest, default_value=None):
         "name": name
     }
 
-def walk_object(object, callback):
+def walk_object(object, callback, update=False):
     validate(object is not None, "Invalid object supplied to walk_object")
     validate(callable(callback), "Invalid callback supplied to walk_object")
+    validate(isinstance(update, bool), "Invalid update flag passed to walk_object")
 
     if not isinstance(object, (dict, list)):
         # Still call the callback for the top level object
@@ -128,14 +129,18 @@ def walk_object(object, callback):
         if isinstance(current, dict):
             for key in current:
                 # Call the callback to replace the current object
-                current[key] = callback(current[key])
+                ret = callback(current[key])
+                if update:
+                    current[key] = ret
 
                 if isinstance(current[key], (dict, list)):
                     item_list.append(current[key])
         elif isinstance(current, list):
             index = 0
             while index < len(current):
-                current[index] = callback(current[index])
+                ret = callback(current[index])
+                if update:
+                    current[index] = ret
 
                 if isinstance(current[index], (dict, list)):
                     item_list.append(current[index])

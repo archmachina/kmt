@@ -365,7 +365,7 @@ class Pipeline:
         # Call _resolve_reference for all nodes in the manifest to see if replacement
         # is required
         for manifest in manifests:
-            util.walk_object(manifest.spec, lambda x: self._resolve_reference(manifest, x))
+            util.walk_object(manifest.spec, lambda x: self._resolve_reference(manifest, x), update=True)
 
         return manifests
 
@@ -560,9 +560,18 @@ class SpecUtil:
         item = self.template_if_string(item, var_override=var_override)
 
         # Walk the object and template anything that is a string
-        item = util.walk_object(item, lambda x: self.template_if_string(x, var_override=var_override))
+        item = util.walk_object(item, lambda x: self.template_if_string(x, var_override=var_override), update=True)
 
         return item
+
+    def _get_template_str_vars(self, template_str):
+        if not isinstance(template_str, str):
+            return set()
+
+        ast = self._environment.parse(template_str)
+        deps = set(find_undeclared_variables(ast))
+
+        return deps
 
     def _resolve_var_refs(self):
         """
@@ -581,6 +590,10 @@ class SpecUtil:
             if isinstance(self.vars[key], str):
                 ast = self._environment.parse(self.vars[key])
                 deps = set(find_undeclared_variables(ast))
+
+            # Recursively walk through all properties for the object and calculate a set
+            # of dependencies
+            # util.walk_object(self.vars[key], lambda x: deps.union(self._get_template_str_vars(x)))
 
             var_map[key] = deps
 
