@@ -148,6 +148,8 @@ def walk_object(object, callback, update=False):
             # is really an internal error
             raise exception.KMTInternalException(f"Invalid type for resolve in walk_object: {type(current)}")
 
+    return object
+
 def coerce_value(types, val):
     if types is None:
         # Nothing to do here
