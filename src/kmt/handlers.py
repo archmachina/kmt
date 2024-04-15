@@ -181,44 +181,6 @@ class StepHandlerVars(types.StepHandler):
                         manifest.vars[key] = value
                         logger.debug(f"Set manifest var {key} -> {value}")
 
-# class StepHandlerReplace(types.StepHandler):
-#     """
-#     """
-#     def extract(self, step_def):
-#         self.items = util.extract_property(step_def, "items")
-
-#         self.regex = util.extract_property(step_def, "regex", default=False)
-
-#     def run(self):
-#         working_manifests = self.state.working_manifests.copy()
-#         spec_util = self.state.spec_util
-
-#         regex = spec_util.resolve(self.regex, bool)
-
-#         for manifest in working_manifests:
-#             manifest_vars = manifest.create_scoped_vars(self.state.vars)
-#             spec_util = self.state.spec_util.new_scope(manifest_vars)
-
-#             for replace_item in spec_util.resolve(self.items, list):
-#                 # Copy the dictionary as we'll change it when removing values
-#                 replace_item = replace_item.copy()
-
-#                 replace_key = util.extract_property(replace_item, "key")
-#                 replace_key = spec_util.resolve(replace_key, str)
-
-#                 replace_value = util.extract_property(replace_item, "value")
-#                 replace_value = spec_util.resolve(replace_value, str)
-
-#                 replace_regex = util.extract_property(replace_item, "regex", default=False)
-#                 replace_regex = spec_util.resolve(replace_regex, bool)
-
-#                 logger.debug(f"replace: replacing regex({regex or replace_regex}): {replace_key} -> {replace_value}")
-
-#                 if regex or replace_regex:
-#                     manifest.text = re.sub(replace_key, replace_value, manifest.text)
-#                 else:
-#                     manifest.text = manifest.text.replace(replace_key, replace_value)
-
 class StepHandlerStdin(types.StepHandler):
     """
     """
