@@ -26,19 +26,19 @@ class StepHandlerPipeline(types.StepHandler):
         self.pass_manifests = util.extract_property(step_def, "pass_manifests", default=False)
 
     def run(self):
-        spec_util = self.state.spec_util
+        templater = self.state.templater
 
         # Determine whether we pass manifests to the new pipeline
         # Filtering is done via normal support handlers e.g. when, tags, etc.
-        pass_manifests = spec_util.resolve(self.pass_manifests, bool)
+        pass_manifests = templater.resolve(self.pass_manifests, bool)
 
         # Path to the other pipeline
-        path = spec_util.resolve(self.path, str)
+        path = templater.resolve(self.path, str)
 
         # Vars to pass to the new pipeline
         # Do a recursive template/resolve all references before passing it to
         # the new pipeline
-        pipeline_vars = spec_util.resolve(self.vars, dict, recursive=True)
+        pipeline_vars = templater.resolve(self.vars, dict, recursive=True)
 
         pipeline_manifests = []
         if pass_manifests:
@@ -79,16 +79,16 @@ class StepHandlerImport(types.StepHandler):
         self.template = util.extract_property(step_def, "template", default=True)
 
     def run(self):
-        spec_util = self.state.spec_util
+        templater = self.state.templater
 
         filenames = set()
 
-        import_files = spec_util.resolve(self.import_files, list)
-        import_files = [spec_util.resolve(x, str) for x in import_files]
+        import_files = templater.resolve(self.import_files, list)
+        import_files = [templater.resolve(x, str) for x in import_files]
 
-        recursive = spec_util.resolve(self.recursive, bool)
+        recursive = templater.resolve(self.recursive, bool)
 
-        template = spec_util.resolve(self.template, bool)
+        template = templater.resolve(self.template, bool)
 
         for import_file in import_files:
             logger.debug(f"import: processing file glob: {import_file}")
@@ -106,7 +106,7 @@ class StepHandlerImport(types.StepHandler):
                 content = file.read()
 
             if template:
-                content = spec_util.template_if_string(content)
+                content = templater.template_if_string(content)
                 if not isinstance(content, str):
                     raise PipelineRunException("Could not template import text")
 
@@ -130,11 +130,11 @@ class StepHandlerVars(types.StepHandler):
 
     def run(self):
         working_manifests = self.state.working_manifests.copy()
-        spec_util = self.state.spec_util
+        templater = self.state.templater
 
-        pipeline_var_list = spec_util.resolve(self.pipeline_var_list, (list, type(None)))
+        pipeline_var_list = templater.resolve(self.pipeline_var_list, (list, type(None)))
         if pipeline_var_list is not None:
-            pipeline_var_list = [spec_util.resolve(x, dict) for x in pipeline_var_list]
+            pipeline_var_list = [templater.resolve(x, dict) for x in pipeline_var_list]
             # pipeline_vars should be a list of dictionaries now
 
             for var_spec in pipeline_var_list:
@@ -145,20 +145,20 @@ class StepHandlerVars(types.StepHandler):
                 util.validate(len(var_spec.keys()) == 0, f"Unknown properties on vars spec: {var_spec.keys()}")
 
                 # Resolve any templating and type
-                key = spec_util.resolve(key, str)
-                value = spec_util.resolve(value, str)
+                key = templater.resolve(key, str)
+                value = templater.resolve(value, str)
 
                 self.state.pipeline.vars[key] = value
                 logger.debug(f"Set pipeline var {key} -> {value}")
 
         for manifest in working_manifests:
             manifest_vars = manifest.create_scoped_vars(self.state.vars)
-            spec_util = self.state.spec_util.new_scope(manifest_vars)
+            templater = self.state.templater.new_scope(manifest_vars)
 
-            manifest_var_list = spec_util.resolve(self.manifest_var_list, (list, type(None)))
+            manifest_var_list = templater.resolve(self.manifest_var_list, (list, type(None)))
 
             if manifest_var_list is not None:
-                manifest_var_list = [spec_util.resolve(x, dict) for x in manifest_var_list]
+                manifest_var_list = [templater.resolve(x, dict) for x in manifest_var_list]
                 # manifest_var_list should be a list of dictionaries now
 
                 for var_spec in manifest_var_list:
@@ -170,9 +170,9 @@ class StepHandlerVars(types.StepHandler):
                     util.validate(len(var_spec.keys()) == 0, f"Unknown properties on vars spec: {var_spec.keys()}")
 
                     # Resolve any templating and type
-                    key = spec_util.resolve(key, str)
-                    value = spec_util.resolve(value, str)
-                    set_pipeline = spec_util.resolve(set_pipeline, bool)
+                    key = templater.resolve(key, str)
+                    value = templater.resolve(value, str)
+                    set_pipeline = templater.resolve(set_pipeline, bool)
 
                     if set_pipeline:
                         self.state.pipeline.vars[key] = value
@@ -189,16 +189,16 @@ class StepHandlerStdin(types.StepHandler):
         self.template = util.extract_property(step_def, "template", default=True)
 
     def run(self):
-        spec_util = self.state.spec_util
+        templater = self.state.templater
 
-        template = spec_util.resolve(self.template, bool)
+        template = templater.resolve(self.template, bool)
 
         # Read content from stdin
         logger.debug("stdin: reading document from stdin")
         content = sys.stdin.read()
 
         if template:
-            content = spec_util.template_if_string(content)
+            content = templater.template_if_string(content)
             if not isinstance(content, str):
                 raise PipelineRunException("Could not template import text")
 
@@ -232,11 +232,11 @@ class StepHandlerJsonPatch(types.StepHandler):
 
         for manifest in working_manifests:
             manifest_vars = manifest.create_scoped_vars(self.state.vars)
-            spec_util = self.state.spec_util.new_scope(manifest_vars)
+            templater = self.state.templater.new_scope(manifest_vars)
 
             # Apply the patches to the manifest object
-            patches = spec_util.resolve(self.patches, list)
-            patches = [spec_util.resolve(x, dict) for x in patches]
+            patches = templater.resolve(self.patches, list)
+            patches = [templater.resolve(x, dict) for x in patches]
             patch_list = jsonpatch.JsonPatch(patches)
             manifest.spec = patch_list.apply(manifest.spec)
 
@@ -268,36 +268,36 @@ class StepHandlerMetadata(types.StepHandler):
 
         for manifest in working_manifests:
             manifest_vars = manifest.create_scoped_vars(self.state.vars)
-            spec_util = self.state.spec_util.new_scope(manifest_vars)
+            templater = self.state.templater.new_scope(manifest_vars)
 
             spec = manifest.spec
 
             if spec.get("metadata") is None:
                 spec["metadata"] = {}
 
-            name = spec_util.resolve(self.name, (str, type(None)))
+            name = templater.resolve(self.name, (str, type(None)))
             if name is not None:
                 spec["metadata"]["name"] = name
 
-            namespace = spec_util.resolve(self.namespace, (str, type(None)))
+            namespace = templater.resolve(self.namespace, (str, type(None)))
             if namespace is not None:
                 spec["metadata"]["namespace"] = namespace
 
-            annotations = spec_util.resolve(self.annotations, (dict, type(None)))
+            annotations = templater.resolve(self.annotations, (dict, type(None)))
             if annotations is not None:
                 if spec["metadata"].get("annotations") is None:
                     spec["metadata"]["annotations"] = {}
 
                 for key in annotations:
-                    spec["metadata"]["annotations"][key] = spec_util.resolve(annotations[key], str)
+                    spec["metadata"]["annotations"][key] = templater.resolve(annotations[key], str)
 
-            labels = spec_util.resolve(self.labels, (dict, type(None)))
+            labels = templater.resolve(self.labels, (dict, type(None)))
             if labels is not None:
                 if spec["metadata"].get("labels") is None:
                     spec["metadata"]["labels"] = {}
 
                 for key in labels:
-                    spec["metadata"]["labels"][key] = spec_util.resolve(labels[key], str)
+                    spec["metadata"]["labels"][key] = templater.resolve(labels[key], str)
 
 types.default_handlers["pipeline"] = StepHandlerPipeline
 types.default_handlers["import"] = StepHandlerImport

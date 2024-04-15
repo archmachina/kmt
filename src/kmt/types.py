@@ -210,7 +210,7 @@ class PipelineStepState:
         self.pipeline = pipeline
         self.vars = step_vars
         self.working_manifests = working_manifests
-        self.spec_util = SpecUtil(self.pipeline.common.environment, self.vars)
+        self.templater = Templater(self.pipeline.common.environment, self.vars)
 
         self.skip_handler = False
 
@@ -220,7 +220,7 @@ class PipelineSupportHandler:
 
         self.pipeline = pipeline
         self.pipeline_vars = pipeline_vars
-        self.spec_util = SpecUtil(self.pipeline.common.environment, self.pipeline_vars)
+        self.templater = Templater(self.pipeline.common.environment, self.pipeline_vars)
 
     def pre(self):
         raise PipelineRunException("pre undefined in PipelineSupportHandler")
@@ -303,31 +303,31 @@ class Pipeline:
         # Extract relevant properties from the spec
         #
 
-        spec_util = SpecUtil(environment=self.common.environment, template_vars={})
+        templater = Templater(environment=self.common.environment, template_vars={})
         logger.debug("Processing pipeline specification")
 
         # Config defaults - vars that can be overridden by the supplied vars
         # Don't template the vars - These will be templated when processed in a step
         config_defaults = util.extract_property(pipeline_spec, "defaults", default={})
-        config_defaults = spec_util.resolve(config_defaults, dict, template=False)
+        config_defaults = templater.resolve(config_defaults, dict, template=False)
         util.validate(isinstance(config_defaults, dict), "Config 'defaults' is not a dictionary")
 
         # Config vars - vars that can't be overridden
         # Don't template the vars - These will be templated when processed in a step
         config_vars = util.extract_property(pipeline_spec, "vars", default={})
-        config_vars = spec_util.resolve(config_vars, dict, template=False)
+        config_vars = templater.resolve(config_vars, dict, template=False)
         util.validate(isinstance(config_vars, dict), "Config 'vars' is not a dictionary")
 
         # Pipeline - list of the steps to run for this pipeline
         # Don't template the pipeline steps - These will be templated when they are executed
         config_pipeline = util.extract_property(pipeline_spec, "pipeline", default=[])
-        config_pipeline = spec_util.resolve(config_pipeline, list, template=False)
+        config_pipeline = templater.resolve(config_pipeline, list, template=False)
         util.validate(isinstance(config_pipeline, list), "Config 'pipeline' is not a list")
         self.pipeline_steps = config_pipeline
 
         # Accept manifests - whether to include incoming manifests in pipeline processing
         accept_manifests = util.extract_property(pipeline_spec, "accept_manifests", default=False)
-        accept_manifests = spec_util.resolve(accept_manifests, bool)
+        accept_manifests = templater.resolve(accept_manifests, bool)
         util.validate(isinstance(accept_manifests, bool), "Invalid type for accept_manifests")
 
         # If accept_manifests is true, we'll apply the pipeline steps to the incoming manifests as well
@@ -435,9 +435,9 @@ class Pipeline:
 
             # Extract the step config and allow it to be templated with vars defined up to this
             # point
-            spec_util = SpecUtil(self.common.environment, state.vars)
+            templater = Templater(self.common.environment, state.vars)
             step_inner = util.extract_property(step_outer, step_type, default={})
-            step_inner = spec_util.resolve(step_inner, (dict, type(None)))
+            step_inner = templater.resolve(step_inner, (dict, type(None)))
             if step_inner is None:
                 step_inner = {}
             util.validate(isinstance(step_inner, dict), "Invalid value for step inner configuration")
@@ -485,16 +485,16 @@ class Pipeline:
 
         return self.manifests + self._input_manifests
 
-class SpecUtil:
+class Templater:
     def __init__(self, environment, template_vars):
-        util.validate(isinstance(environment, jinja2.Environment), "Invalid environment passed to SpecUtil ctor")
-        util.validate(isinstance(template_vars, dict), "Invalid template vars passed to SpecUtil")
+        util.validate(isinstance(environment, jinja2.Environment), "Invalid environment passed to Templater ctor")
+        util.validate(isinstance(template_vars, dict), "Invalid template vars passed to Templater")
 
         self._environment = environment
 
         # Define the template vars
         # Don't copy the template vars, just reference it. These vars may be changed elsewhere
-        # and shouldn't need to be reimported or altered within the SpecUtil
+        # and shouldn't need to be reimported or altered within the Templater
         self._unresolved_vars = template_vars
         self.vars = copy.deepcopy(template_vars)
         self._resolve_var_refs()
@@ -507,9 +507,9 @@ class SpecUtil:
         for key in new_vars:
             working_vars[key] = new_vars[key]
 
-        new_spec_util = SpecUtil(self._environment, working_vars)
+        new_templater = Templater(self._environment, working_vars)
 
-        return new_spec_util
+        return new_templater
 
     def template_if_string(self, val, var_override=None, limit=30):
         util.validate(isinstance(var_override, dict) or var_override is None,
