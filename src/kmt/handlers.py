@@ -26,7 +26,7 @@ class StepHandlerPipeline(types.StepHandler):
         self.pass_manifests = util.extract_property(step_def, "pass_manifests", default=False)
 
     def run(self):
-        templater = self.state.templater
+        templater = types.Templater(self.state.pipeline.common.environment, self.state.pipeline.vars)
 
         # Determine whether we pass manifests to the new pipeline
         # Filtering is done via normal support handlers e.g. when, tags, etc.
@@ -45,10 +45,11 @@ class StepHandlerPipeline(types.StepHandler):
             # If we're passing manifests to the new pipeline, then the working_manifests
             # list needs to be cleared and the passed manifests removed from the current pipeline
             # manifest list
-            for manifest in self.state.working_manifests:
-                self.state.pipeline.manifests.remove(manifest)
+            for spec in self.state.working_manifests:
+                self.state.pipeline.manifests.remove(spec)
 
-            pipeline_manifests = self.state.working_manifests
+            # Only pass the spec, not the Manifest object itself
+            pipeline_manifests = [x.spec for x in self.state.working_manifests]
             self.state.working_manifests = []
 
             # The working manifests are no longer in the pipeline manifests and working_manifests is empty.
@@ -58,15 +59,16 @@ class StepHandlerPipeline(types.StepHandler):
         pipeline = types.Pipeline(path, common=self.state.pipeline.common,
                         pipeline_vars=pipeline_vars, manifests=pipeline_manifests)
 
-        pipeline_manifests = pipeline.run_no_resolve()
+        pipeline_manifests = [x.spec for x in pipeline.run_no_resolve()]
 
         # The manifests returned from the pipeline will be added to the working manifests
         # If pass_manifests is true, then working_manifests would be empty, but if not, then
         # there are still working manifests to be preserved, so append the manifests
         # They also need to be entered in to the pipeline manifest list
-        for manifest in pipeline_manifests:
-            self.state.working_manifests.append(manifest)
-            self.state.pipeline.manifests.append(manifest)
+        for spec in pipeline_manifests:
+            new_manifest = types.Manifest(spec, pipeline=self.state.pipeline)
+            self.state.working_manifests.append(new_manifest)
+            self.state.pipeline.manifests.append(new_manifest)
 
 class StepHandlerImport(types.StepHandler):
     """
@@ -79,7 +81,7 @@ class StepHandlerImport(types.StepHandler):
         self.template = util.extract_property(step_def, "template", default=True)
 
     def run(self):
-        templater = self.state.templater
+        templater = types.Templater(self.state.pipeline.common.environment, self.state.pipeline.vars)
 
         filenames = set()
 
@@ -114,7 +116,7 @@ class StepHandlerImport(types.StepHandler):
             docs = [x for x in yamlwrap.load_all(content)]
 
             for doc in docs:
-                manifest = types.Manifest(doc)
+                manifest = types.Manifest(doc, pipeline=self.state.pipeline)
                 manifest.vars["import_filename"] = filename
 
                 self.state.pipeline.manifests.append(manifest)
@@ -130,7 +132,7 @@ class StepHandlerVars(types.StepHandler):
 
     def run(self):
         working_manifests = self.state.working_manifests.copy()
-        templater = self.state.templater
+        templater = types.Templater(self.state.pipeline.common.environment, self.state.pipeline.vars)
 
         pipeline_var_list = templater.resolve(self.pipeline_var_list, (list, type(None)))
         if pipeline_var_list is not None:
@@ -152,8 +154,7 @@ class StepHandlerVars(types.StepHandler):
                 logger.debug(f"Set pipeline var {key} -> {value}")
 
         for manifest in working_manifests:
-            manifest_vars = manifest.create_scoped_vars(self.state.vars)
-            templater = self.state.templater.new_scope(manifest_vars)
+            templater = types.Templater(self.state.pipeline.common.environment, manifest.vars)
 
             manifest_var_list = templater.resolve(self.manifest_var_list, (list, type(None)))
 
@@ -189,7 +190,7 @@ class StepHandlerStdin(types.StepHandler):
         self.template = util.extract_property(step_def, "template", default=True)
 
     def run(self):
-        templater = self.state.templater
+        templater = types.Templater(self.state.pipeline.common.environment, self.state.pipeline.vars)
 
         template = templater.resolve(self.template, bool)
 
@@ -206,7 +207,7 @@ class StepHandlerStdin(types.StepHandler):
         docs = [x for x in yamlwrap.load_all(content)]
 
         for doc in docs:
-            manifest = types.Manifest(doc)
+            manifest = types.Manifest(doc, self.state.pipeline)
 
             self.state.pipeline.manifests.append(manifest)
             self.state.working_manifests.append(manifest)
@@ -231,8 +232,7 @@ class StepHandlerJsonPatch(types.StepHandler):
         working_manifests = self.state.working_manifests.copy()
 
         for manifest in working_manifests:
-            manifest_vars = manifest.create_scoped_vars(self.state.vars)
-            templater = self.state.templater.new_scope(manifest_vars)
+            templater = types.Templater(self.state.pipeline.common.environment, manifest.vars)
 
             # Apply the patches to the manifest object
             patches = templater.resolve(self.patches, list)
@@ -267,8 +267,7 @@ class StepHandlerMetadata(types.StepHandler):
         working_manifests = self.state.working_manifests.copy()
 
         for manifest in working_manifests:
-            manifest_vars = manifest.create_scoped_vars(self.state.vars)
-            templater = self.state.templater.new_scope(manifest_vars)
+            templater = types.Templater(self.state.pipeline.common.environment, manifest.vars)
 
             spec = manifest.spec
 

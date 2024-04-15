@@ -3,11 +3,13 @@ import logging
 import hashlib
 import textwrap
 import yaml
+import copy
 import jinja2
 
 from . import exception
 from . import types
 from . import yamlwrap
+from jinja2.meta import find_undeclared_variables
 
 logger = logging.getLogger(__name__)
 
@@ -101,9 +103,14 @@ def walk_object(object, callback, update=False):
     validate(callable(callback), "Invalid callback supplied to walk_object")
     validate(isinstance(update, bool), "Invalid update flag passed to walk_object")
 
+    # Always visit the top level object
+    ret = callback(object)
+    if update:
+        # If we're updating, this becomes the new root level object to return
+        object = ret
+
     if not isinstance(object, (dict, list)):
-        # Still call the callback for the top level object
-        callback(object)
+        # Nothing else to do for this object
         return object
 
     visited = set()
@@ -226,3 +233,86 @@ def extract_property(spec, key, /, default=None, required=False):
     val = spec.pop(key)
 
     return val
+
+def _get_template_str_vars(template_str, environment:jinja2.Environment):
+    if not isinstance(template_str, str):
+        return set()
+
+    ast = environment.parse(template_str)
+    deps = set(find_undeclared_variables(ast))
+
+    return deps
+
+def resolve_var_refs(source_vars:dict, environment:jinja2.Environment, inplace=False):
+    """
+    Performs templating on the source dictionary and attempts to resolve variable references
+    taking in to account nested references
+    """
+    validate(isinstance(source_vars, dict), "Invalid source vars provided to resolve_var_refs")
+    validate(isinstance(inplace, bool), "Invalid inplace var provided to resolve_var_refs")
+
+    var_map = {}
+
+    working_vars = source_vars
+    if not inplace:
+        working_vars = copy.deepcopy(source_vars)
+
+    # Create a map of keys to the vars the value references
+    for key in working_vars:
+        deps = set()
+
+        # Recursively walk through all properties for the object and calculate a set
+        # of dependencies
+        # It's possible that some dependencies could be resolvable, but will show as unresolvable here:
+        # If a.b depends on x.y, and x.x depends on a.a, it could, in theory, be resolved, but this will
+        # show it as unresolvable.
+        # Since we don't have access to that info from jinja2 easily, it would be difficult to calculate
+        # and offers little value being a small edge case.
+        walk_object(working_vars[key], lambda x: deps.update(_get_template_str_vars(x, environment)))
+
+        var_map[key] = deps
+
+    # Loop while there are values left in var_map, which represents the key/value
+    # and the vars it depends on
+    while len(var_map.keys()) > 0:
+        process_list = []
+
+        # Add any keys to the process list that don't have any dependencies left
+        for key in var_map:
+            if len(var_map[key]) == 0:
+                process_list.append(key)
+
+        # Remove the items we're processing from the var map
+        for key in process_list:
+            var_map.pop(key)
+
+        # Fail if there is nothing to process
+        if len(process_list) < 1:
+            raise exception.KMTResolveException(
+                f"Circular or unresolvable variable references: vars {var_map}"
+            )
+
+        for prockey in process_list:
+            # Template the variable and update 'new_vars'
+            working_vars[prockey] = walk_object(
+                working_vars[prockey],
+                lambda x: _template_if_string(x, environment, working_vars),
+                update=True
+            )
+
+            # Remove the variable as a dependency for all other variables
+            for key in var_map:
+                if prockey in var_map[key]:
+                    var_map[key].remove(prockey)
+
+    return working_vars
+
+def _template_if_string(source, environment:jinja2.Environment, template_vars:dict):
+    validate(isinstance(environment, jinja2.Environment), "Invalid environment passed to _template_string")
+    validate(isinstance(template_vars, dict), "Invalid template_vars passed to _template_string")
+
+    if not isinstance(source, str):
+        return source
+
+    template = environment.from_string(source)
+    return template.render(template_vars)

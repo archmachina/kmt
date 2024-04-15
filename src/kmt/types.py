@@ -7,11 +7,9 @@ import logging
 import re
 
 from . import util
-from kmt import yamlwrap
+from . import yamlwrap
 
 from . import exception
-from .exception import PipelineRunException
-from jinja2.meta import find_undeclared_variables
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +43,7 @@ class Lookup:
                 errored.append(key)
 
         if len(errored) > 0:
-            raise PipelineRunException(f"Invalid keys or invalid key value found on lookup: {errored}")
+            raise exception.PipelineRunException(f"Invalid keys or invalid key value found on lookup: {errored}")
 
     def find_matches(self, manifests, *, current_namespace=None):
         return self._find(manifests, multiple=True, current_namespace=current_namespace)
@@ -92,10 +90,10 @@ class Lookup:
             return matches
 
         if len(matches) == 0:
-            raise PipelineRunException("Could not find a matching object for Lookup find")
+            raise exception.PipelineRunException("Could not find a matching object for Lookup find")
 
         if len(matches) > 1:
-            raise PipelineRunException("Could not find a single object for Lookup find. Multiple object matches")
+            raise exception.PipelineRunException("Could not find a single object for Lookup find. Multiple object matches")
 
         return matches[0]
 
@@ -112,43 +110,57 @@ yaml.Dumper.add_representer(Lookup, lookup_representer)
 yaml.SafeLoader.add_constructor("!lookup", lookup_constructor)
 yaml.Loader.add_constructor("!lookup", lookup_constructor)
 
+class NoTemplateList(list):
+    pass
+
+class NoTemplateDict(dict):
+    pass
+
 class Manifest:
-    def __init__(self, source):
+    def __init__(self, source, *, pipeline):
         util.validate(isinstance(source, dict), "Invalid source passed to Manifest init")
+        util.validate(isinstance(pipeline, Pipeline), "Invalid pipeline passed to Manifest init")
 
         self.spec = source
+        self.pipeline = pipeline
 
         self.tags = set()
+        self.unresolved_vars = {}
         self.vars = {}
+
+        self.refresh_vars()
 
     def __str__(self):
         output = yamlwrap.dump(self.spec)
 
         return output
 
-    def create_scoped_vars(self, base_vars):
-        util.validate(isinstance(base_vars, dict), "Invalid base_vars passed to Manifest create_vars")
+    def refresh_vars(self):
 
-        new_vars = base_vars.copy()
+        # Add builtin values
+        self.unresolved_vars["env"] = NoTemplateDict(os.environ.copy())
+        self.unresolved_vars["kmt_manifests"] = NoTemplateList(self.pipeline.manifests)
 
-        # Copy any vars that have been defined for the manifest
-        for key in self.vars:
-            new_vars[key] = self.vars[key]
+        self.unresolved_vars["kmt_tags"] = NoTemplateList(list(self.tags))
+        self.unresolved_vars["kmt_manifest"] = NoTemplateDict(self.spec)
 
-        # Set some builtin vars
-        new_vars["kmt_tags"] = list(self.tags)
-        new_vars["kmt_manifest"] = self.spec
+        unresolved_vars = self.pipeline.unresolved_vars.copy()
+        unresolved_vars.update(self.unresolved_vars)
+
+        self.vars = util.resolve_var_refs(unresolved_vars, self.pipeline.common.environment)
+
+        self.refresh_metadata()
+
+    def refresh_metadata(self):
 
         info = util.extract_manifest_info(self.spec, default_value="")
 
-        new_vars["kmt_metadata_group"] = info["group"]
-        new_vars["kmt_metadata_version"] = info["version"]
-        new_vars["kmt_metadata_kind"] = info["kind"]
-        new_vars["kmt_metadata_api_version"] = info["api_version"]
-        new_vars["kmt_metadata_namespace"] = info["namespace"]
-        new_vars["kmt_metadata_name"] = info["name"]
-
-        return new_vars
+        self.vars["kmt_metadata_group"] = info["group"]
+        self.vars["kmt_metadata_version"] = info["version"]
+        self.vars["kmt_metadata_kind"] = info["kind"]
+        self.vars["kmt_metadata_api_version"] = info["api_version"]
+        self.vars["kmt_metadata_namespace"] = info["namespace"]
+        self.vars["kmt_metadata_name"] = info["name"]
 
     def refresh_hash(self):
 
@@ -201,32 +213,27 @@ class Common:
             self.environment.filters[key] = filters[key]
 
 class PipelineStepState:
-    def __init__(self, pipeline, step_vars, working_manifests):
+    def __init__(self, pipeline, working_manifests):
         util.validate(isinstance(pipeline, Pipeline) or pipeline is None, "Invalid pipeline passed to PipelineStepState")
-        util.validate(isinstance(step_vars, dict), "Invalid step vars passed to PipelineStepState")
         util.validate(isinstance(working_manifests, list) and all(isinstance(x, Manifest) for x in working_manifests),
             "Invalid working manifests passed to PipelineStepState")
 
         self.pipeline = pipeline
-        self.vars = step_vars
         self.working_manifests = working_manifests
-        self.templater = Templater(self.pipeline.common.environment, self.vars)
 
         self.skip_handler = False
 
 class PipelineSupportHandler:
-    def init(self, pipeline, pipeline_vars):
+    def init(self, pipeline):
         util.validate(isinstance(pipeline, Pipeline), "Invalid pipeline passed to PipelineSupportHandler")
 
         self.pipeline = pipeline
-        self.pipeline_vars = pipeline_vars
-        self.templater = Templater(self.pipeline.common.environment, self.pipeline_vars)
 
     def pre(self):
-        raise PipelineRunException("pre undefined in PipelineSupportHandler")
+        raise exception.PipelineRunException("pre undefined in PipelineSupportHandler")
 
     def post(self):
-        raise PipelineRunException("post undefined in PipelineSupportHandler")
+        raise exception.PipelineRunException("post undefined in PipelineSupportHandler")
 
 class StepSupportHandler:
     def init(self, state):
@@ -235,13 +242,13 @@ class StepSupportHandler:
         self.state = state
 
     def extract(self, step):
-        raise PipelineRunException("parse undefined in StepSupportHandler")
+        raise exception.PipelineRunException("parse undefined in StepSupportHandler")
 
     def pre(self):
-        raise PipelineRunException("pre undefined in StepSupportHandler")
+        raise exception.PipelineRunException("pre undefined in StepSupportHandler")
 
     def post(self):
-        raise PipelineRunException("post undefined in StepSupportHandler")
+        raise exception.PipelineRunException("post undefined in StepSupportHandler")
 
 class StepHandler:
     def init(self, state):
@@ -250,10 +257,10 @@ class StepHandler:
         self.state = state
 
     def extract(self, step):
-        raise PipelineRunException("parse undefined in StepHandler")
+        raise exception.PipelineRunException("parse undefined in StepHandler")
 
     def run(self):
-        raise PipelineRunException("run undefined in StepHandler")
+        raise exception.PipelineRunException("run undefined in StepHandler")
 
 class Pipeline:
     def __init__(self, configdir, common=None, pipeline_vars=None, manifests=None):
@@ -263,19 +270,22 @@ class Pipeline:
 
         if manifests is None:
             manifests = []
-        
+
         if common is None:
             common = Common()
 
         util.validate(isinstance(configdir, str) and configdir != "", "Invalid configdir passed to Pipeline init")
         util.validate(isinstance(pipeline_vars, dict), "Invalid pipeline_vars passed to Pipeline init")
-        util.validate(isinstance(manifests, list) and all(isinstance(x, Manifest) for x in manifests),
+        util.validate(isinstance(manifests, list) and all(isinstance(x, dict) for x in manifests),
             "Invalid manifests passed to Pipeline init")
         util.validate(isinstance(common, Common), "Invalid common object passed to Pipeline init")
 
         self.common = common
+
         self._input_manifests = manifests
         self.manifests = []
+
+        self.unresolved_vars = {}
         self.vars = {}
 
         #
@@ -286,11 +296,11 @@ class Pipeline:
         configdir = os.path.realpath(configdir)
         logger.debug(f"Processing pipeline for directory: {configdir}")
         if not os.path.isdir(configdir):
-            raise PipelineRunException(f"Config dir {configdir} is not a directory")
+            raise exception.PipelineRunException(f"Config dir {configdir} is not a directory")
 
         configfile = os.path.join(configdir, "config.yaml")
         if not os.path.isfile(configfile):
-            raise PipelineRunException(f"Could not find config.yaml in config directory {configdir}")
+            raise exception.PipelineRunException(f"Could not find config.yaml in config directory {configdir}")
 
         # Parse content of the config file and process parameters
         with open(configfile, "r", encoding="utf-8") as file:
@@ -303,6 +313,7 @@ class Pipeline:
         # Extract relevant properties from the spec
         #
 
+        # Temporary templater, just for retrieving the pipeline configuration
         templater = Templater(environment=self.common.environment, template_vars={})
         logger.debug("Processing pipeline specification")
 
@@ -330,6 +341,9 @@ class Pipeline:
         accept_manifests = templater.resolve(accept_manifests, bool)
         util.validate(isinstance(accept_manifests, bool), "Invalid type for accept_manifests")
 
+        # Create manifests out of the dictionary specs passed in
+        self._input_manifests = [Manifest(x, pipeline=self) for x in self._input_manifests]
+
         # If accept_manifests is true, we'll apply the pipeline steps to the incoming manifests as well
         if accept_manifests:
             self.manifests = self._input_manifests
@@ -342,20 +356,32 @@ class Pipeline:
         # Merge variables in to the pipeline variables in order
         #
 
-        # Merge defaults in to the pipeline vars
-        for key in config_defaults:
-            self.vars[key] = config_defaults[key]
+        # Merge defaults, then supplied vars, then 'vars' in to the pipeline
+        # Allows defaults to be overridden by the caller, but then 'vars'
+        # can enforce a value, if required
+        self.unresolved_vars.update(config_defaults)
+        self.unresolved_vars.update(pipeline_vars)
+        self.unresolved_vars.update(config_vars)
 
-        # Merge supplied vars in to the pipeline vars
-        for key in pipeline_vars:
-            self.vars[key] = pipeline_vars[key]
+        # Refresh pipeline and all manifest vars
+        self.refresh_all_vars()
 
-        # Merge 'vars' in to the pipeline vars last as these take preference
-        for key in config_vars:
-            self.vars[key] = config_vars[key]
+    def refresh_all_vars(self):
+        """
+        Refresh vars for the pipeline and also call refresh on all manifests
+        """
 
-        # Built in vars - override anything else defined
-        self.vars["env"] = os.environ.copy()
+        # Add builtin pipeline vars
+        self.unresolved_vars["kmt_manifests"] = NoTemplateList(self.manifests)
+
+        # Resolve all vars from unresolved vars and store the result in the actual
+        # vars property.
+        # pipeline.vars can be used to access variables that have already been resolved
+        self.vars = util.resolve_var_refs(self.unresolved_vars, self.common.environment)
+
+        # Call refresh for all manifests
+        for manifest in self.manifests:
+            manifest.refresh_vars()
 
     def run(self):
 
@@ -393,7 +419,7 @@ class Pipeline:
         # Create and initialise pipeline support handlers
         ps_handlers = [x() for x in self.common.pipeline_support_handlers]
         for ps_handler in ps_handlers:
-            ps_handler.init(self, self.vars)
+            ps_handler.init(self)
 
         # Run pre for all pipeline support handlers
         for ps_handler in ps_handlers:
@@ -404,12 +430,7 @@ class Pipeline:
         for step_outer in self.pipeline_steps:
             logger.debug(f"Processing step with specification: {step_outer}")
 
-            # Create a common state used by each support handler and handler
-            step_vars = copy.deepcopy(self.vars)
-            step_vars["kmt_manifests"] = self.manifests
-
-            state = PipelineStepState(pipeline=self, step_vars=step_vars,
-                working_manifests=self.manifests.copy())
+            state = PipelineStepState(pipeline=self, working_manifests=self.manifests.copy())
 
             # Initialise each support handler based on the step definition
             # This is the outer step definition, not the arguments to the handler
@@ -421,21 +442,20 @@ class Pipeline:
             # Once the support handlers have initialised, there should be a single
             # key representing the handler type
             if len(step_outer.keys()) < 1:
-                raise PipelineRunException("Missing step type on the step definition")
+                raise exception.PipelineRunException("Missing step type on the step definition")
             
             if len(step_outer.keys()) > 1:
-                raise PipelineRunException(f"Multiple keys remaining on the step definition - cannot determine type: {step_outer.keys()}")
+                raise exception.PipelineRunException(f"Multiple keys remaining on the step definition - cannot determine type: {step_outer.keys()}")
 
             # Extract the step type
             step_type = [x for x in step_outer][0]
             if not isinstance(step_type, str) or step_type == "":
-                raise PipelineRunException("Invalid step type on step definition")
+                raise exception.PipelineRunException("Invalid step type on step definition")
 
             logger.debug(f"Step type: {step_type}")
 
-            # Extract the step config and allow it to be templated with vars defined up to this
-            # point
-            templater = Templater(self.common.environment, state.vars)
+            # Extract the step config and allow it to be templated
+            templater = Templater(self.common.environment, self.vars)
             step_inner = util.extract_property(step_outer, step_type, default={})
             step_inner = templater.resolve(step_inner, (dict, type(None)))
             if step_inner is None:
@@ -444,7 +464,7 @@ class Pipeline:
 
             # Create the handler object to process the handler config
             if step_type not in self.common.handlers:
-                raise PipelineRunException(f"Missing handler for step type: {step_type}")
+                raise exception.PipelineRunException(f"Missing handler for step type: {step_type}")
             
             handler = self.common.handlers[step_type]()
             handler.init(state)
@@ -452,7 +472,7 @@ class Pipeline:
 
             # Make sure there are no remaining properties that the handler wasn't looking for
             if len(step_inner.keys()) > 0:
-                raise PipelineRunException(f"Unexpected properties for handler config: {step_inner.keys()}")
+                raise exception.PipelineRunException(f"Unexpected properties for handler config: {step_inner.keys()}")
 
             # Run pre for any support handlers
             logger.debug("Running pre support handlers")
@@ -477,7 +497,6 @@ class Pipeline:
                 os.chdir(self.configdir)
                 ss_handler.post()
 
-
         # Run post for all pipeline support handlers
         for ps_handler in ps_handlers:
             logger.debug(f"Running pipeline support handler post: {ps_handler}")
@@ -486,139 +505,37 @@ class Pipeline:
         return self.manifests + self._input_manifests
 
 class Templater:
-    def __init__(self, environment, template_vars):
+    def __init__(self, environment:jinja2.Environment, template_vars:dict):
         util.validate(isinstance(environment, jinja2.Environment), "Invalid environment passed to Templater ctor")
         util.validate(isinstance(template_vars, dict), "Invalid template vars passed to Templater")
 
         self._environment = environment
+        self.vars = template_vars
 
-        # Define the template vars
-        # Don't copy the template vars, just reference it. These vars may be changed elsewhere
-        # and shouldn't need to be reimported or altered within the Templater
-        self._unresolved_vars = template_vars
-        self.vars = copy.deepcopy(template_vars)
-        self._resolve_var_refs()
-
-    def new_scope(self, new_vars):
-        util.validate(isinstance(new_vars, dict), "Invalid new_vars passed to new_scope")
-
-        # Create a new set of vars
-        working_vars = self._unresolved_vars.copy()
-        for key in new_vars:
-            working_vars[key] = new_vars[key]
-
-        new_templater = Templater(self._environment, working_vars)
-
-        return new_templater
-
-    def template_if_string(self, val, var_override=None, limit=30):
-        util.validate(isinstance(var_override, dict) or var_override is None,
-            "Invalid var_override passed to template_if_string")
-        util.validate(isinstance(limit, int) and limit > 0, "Invalid limit passed to template_if_string")
+    def template_if_string(self, val):
 
         # Determine which vars will be used for templating
         template_vars = self.vars
-        if var_override is not None:
-            template_vars = var_override
 
         if not isinstance(val, str):
             return val
-        
-        # Perform at most 'count' passes of the string
-        count = 0
-        current = val
 
-        while count < limit:
-            count = count + 1
+        template = self._environment.from_string(val)
+        output = template.render(template_vars)
 
-            template = self._environment.from_string(current)
-            output = template.render(template_vars)
-            if output == current:
-                return output
+        return output
 
-            current = output
-
-        raise PipelineRunException(f"Reached recursion limit for string template '{val}'")
-
-    def resolve(self, value, types, /, template=True, recursive=False, var_override=None):
+    def resolve(self, value, types, /, template=True, recursive=False):
         util.validate(isinstance(template, bool), "Invalid value for template passed to resolve")
 
         # Template the value, if it is a string
         if template:
             if recursive:
-                value = self.recursive_template(value, var_override=var_override)
+                # Walk the object and template anything that is a string
+                value = util.walk_object(value, lambda x: self.template_if_string(x), update=True)
             else:
-                value = self.template_if_string(value, var_override=var_override)
+                value = self.template_if_string(value)
 
         value = util.coerce_value(types, value)
 
         return value
-
-    def recursive_template(self, item, var_override=None):
-
-        # Potentially convert a string to a dict or list type
-        item = self.template_if_string(item, var_override=var_override)
-
-        # Walk the object and template anything that is a string
-        item = util.walk_object(item, lambda x: self.template_if_string(x, var_override=var_override), update=True)
-
-        return item
-
-    def _get_template_str_vars(self, template_str):
-        if not isinstance(template_str, str):
-            return set()
-
-        ast = self._environment.parse(template_str)
-        deps = set(find_undeclared_variables(ast))
-
-        return deps
-
-    def _resolve_var_refs(self):
-        """
-        Performs templating on the source dictionary and attempts to resolve variable references
-        taking in to account nested references
-        """
-
-        var_map = {}
-
-        # Create a map of keys to the vars the value references
-        for key in self.vars:
-            deps = set()
-
-            # Recursively walk through all properties for the object and calculate a set
-            # of dependencies
-            # It's possible that some dependencies could be resolvable, but will show as unresolvable here:
-            # If a.b depends on x.y, and x.x depends on a.a, it could, in theory, be resolved, but this will
-            # show it as unresolvable.
-            # Since we don't have access to that info from jinja2 easily, it would be difficult to calculate
-            # and offers little value being a small edge case.
-            util.walk_object(self.vars[key], lambda x: deps.update(self._get_template_str_vars(x)))
-
-            var_map[key] = deps
-
-        # Loop while there are values left in var_map, which represents the key/value
-        # and the vars it depends on
-        while len(var_map.keys()) > 0:
-            process_list = []
-
-            # Add any keys to the process list that don't have any dependencies left
-            for key in var_map:
-                if len(var_map[key]) == 0:
-                    process_list.append(key)
-
-            # Remove the items we're processing from the var map
-            for key in process_list:
-                var_map.pop(key)
-
-            # Fail if there is nothing to process
-            if len(process_list) < 1:
-                raise exception.KMTResolveException("Circular or unresolvable variable references")
-
-            for prockey in process_list:
-                # Template the variable and update 'new_vars'
-                self.vars[prockey] = self.template_if_string(self.vars[prockey])
-
-                # Remove the variable as a dependency for all other variables
-                for key in var_map:
-                    if prockey in var_map[key]:
-                        var_map[key].remove(prockey)

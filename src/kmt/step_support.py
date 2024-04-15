@@ -33,7 +33,7 @@ class StepSupportWhen(types.StepSupportHandler):
 
     def pre(self):
         working_manifests = self.state.working_manifests.copy()
-        templater = self.state.templater
+        templater = types.Templater(self.state.pipeline.common.environment, self.state.pipeline.vars)
 
         when = templater.resolve(self.when, (list, str))
         if isinstance(when, str):
@@ -47,8 +47,7 @@ class StepSupportWhen(types.StepSupportHandler):
                     return
 
         for manifest in working_manifests:
-            manifest_vars = manifest.create_scoped_vars(self.state.vars)
-            templater = self.state.templater.new_scope(manifest_vars)
+            templater = types.Templater(self.state.pipeline.common.environment, manifest.vars)
 
             filter = templater.resolve(self.filter, (list, str))
             if isinstance(filter, str):
@@ -82,8 +81,7 @@ class StepSupportTags(types.StepSupportHandler):
         working_manifests = self.state.working_manifests.copy()
 
         for manifest in working_manifests:
-            manifest_vars = manifest.create_scoped_vars(self.state.vars)
-            templater = self.state.templater.new_scope(manifest_vars)
+            templater = types.Templater(self.state.pipeline.common.environment, manifest.vars)
 
             match_any_tags = templater.resolve(self.match_any_tags, list)
             match_any_tags = set([templater.resolve(x, str) for x in match_any_tags])
@@ -114,8 +112,7 @@ class StepSupportTags(types.StepSupportHandler):
     def post(self):
 
         for manifest in self.state.working_manifests:
-            manifest_vars = manifest.create_scoped_vars(self.state.vars)
-            templater = self.state.templater.new_scope(manifest_vars)
+            templater = types.Templater(self.state.pipeline.common.environment, manifest.vars)
 
             apply_tags = templater.resolve(self.apply_tags, list)
             for tag in apply_tags:
@@ -137,14 +134,15 @@ class StepSupportMetadata(types.StepSupportHandler):
         working_manifests = self.state.working_manifests.copy()
 
         for manifest in working_manifests:
-            manifest_vars = manifest.create_scoped_vars(self.state.vars)
-            templater = self.state.templater.new_scope(manifest_vars)
+            templater = types.Templater(self.state.pipeline.common.environment, manifest.vars)
 
-            group = manifest_vars["kmt_metadata_group"]
-            version = manifest_vars["kmt_metadata_version"]
-            kind = manifest_vars["kmt_metadata_kind"]
-            namespace = manifest_vars["kmt_metadata_namespace"]
-            name = manifest_vars["kmt_metadata_name"]
+            manifest.refresh_metadata()
+
+            group = manifest.vars["kmt_metadata_group"]
+            version = manifest.vars["kmt_metadata_version"]
+            kind = manifest.vars["kmt_metadata_kind"]
+            namespace = manifest.vars["kmt_metadata_namespace"]
+            name = manifest.vars["kmt_metadata_name"]
 
             # k8s group match
             match_group = templater.resolve(self.match_group, (str, type(None)))
@@ -186,4 +184,4 @@ class StepSupportMetadata(types.StepSupportHandler):
 types.default_step_support_handlers.append(StepSupportMetadata)
 types.default_step_support_handlers.append(StepSupportTags)
 types.default_step_support_handlers.append(StepSupportWhen)
-# types.default_step_support_handlers.append(StepSupportSum)
+# types.default_step_support_handlers.append(StepSupportRefreshHash)

@@ -20,8 +20,7 @@ class PipelineSupportOrdering(types.PipelineSupportHandler):
         ]
 
         for manifest in self.pipeline.manifests:
-            manifest_vars = manifest.create_scoped_vars(self.pipeline.vars)
-            data = tuple([manifest_vars.get(key, "") for key in keys])
+            data = tuple([manifest.vars.get(key, "") for key in keys])
             logger.debug(f"metadata: {data}")
 
         # Don't need a particular ordering, just consistency in output
