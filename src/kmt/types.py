@@ -110,12 +110,6 @@ yaml.Dumper.add_representer(Lookup, lookup_representer)
 yaml.SafeLoader.add_constructor("!lookup", lookup_constructor)
 yaml.Loader.add_constructor("!lookup", lookup_constructor)
 
-class NoTemplateList(list):
-    pass
-
-class NoTemplateDict(dict):
-    pass
-
 class Manifest:
     def __init__(self, source, *, pipeline):
         util.validate(isinstance(source, dict), "Invalid source passed to Manifest init")
@@ -138,16 +132,18 @@ class Manifest:
     def refresh_vars(self):
 
         # Add builtin values
-        self.unresolved_vars["env"] = NoTemplateDict(os.environ.copy())
-        self.unresolved_vars["kmt_manifests"] = NoTemplateList(self.pipeline.manifests)
-
-        self.unresolved_vars["kmt_tags"] = NoTemplateList(list(self.tags))
-        self.unresolved_vars["kmt_manifest"] = NoTemplateDict(self.spec)
+        builtin = {
+            "env": os.environ.copy(),
+            "kmt_manifests": self.pipeline.manifests,
+            "kmt_tags": list(self.tags),
+            "kmt_manifest": self.spec
+        }
 
         unresolved_vars = self.pipeline.unresolved_vars.copy()
         unresolved_vars.update(self.unresolved_vars)
+        unresolved_vars.update(builtin)
 
-        self.vars = util.resolve_var_refs(unresolved_vars, self.pipeline.common.environment)
+        self.vars = util.resolve_var_refs(unresolved_vars, self.pipeline.common.environment, ignore_list=builtin.keys())
 
         self.refresh_metadata()
 
@@ -372,12 +368,16 @@ class Pipeline:
         """
 
         # Add builtin pipeline vars
-        self.unresolved_vars["kmt_manifests"] = NoTemplateList(self.manifests)
+        builtin = {
+            "env": os.environ.copy(),
+            "kmt_manifests": self.manifests
+        }
+        self.unresolved_vars.update(builtin)
 
         # Resolve all vars from unresolved vars and store the result in the actual
         # vars property.
         # pipeline.vars can be used to access variables that have already been resolved
-        self.vars = util.resolve_var_refs(self.unresolved_vars, self.common.environment)
+        self.vars = util.resolve_var_refs(self.unresolved_vars, self.common.environment, ignore_list=builtin.keys())
 
         # Call refresh for all manifests
         for manifest in self.manifests:

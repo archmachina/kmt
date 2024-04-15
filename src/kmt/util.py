@@ -243,13 +243,18 @@ def _get_template_str_vars(template_str, environment:jinja2.Environment):
 
     return deps
 
-def resolve_var_refs(source_vars:dict, environment:jinja2.Environment, inplace=False):
+def resolve_var_refs(source_vars:dict, environment:jinja2.Environment, inplace:bool=False, ignore_list:list=None):
     """
     Performs templating on the source dictionary and attempts to resolve variable references
     taking in to account nested references
     """
     validate(isinstance(source_vars, dict), "Invalid source vars provided to resolve_var_refs")
     validate(isinstance(inplace, bool), "Invalid inplace var provided to resolve_var_refs")
+    validate(ignore_list is None or (all(isinstance(x, str) for x in ignore_list)),
+        "Invalid ignore_list provided to resolve_var_refs")
+
+    if ignore_list is None:
+        ignore_list = []
 
     var_map = {}
 
@@ -268,7 +273,9 @@ def resolve_var_refs(source_vars:dict, environment:jinja2.Environment, inplace=F
         # show it as unresolvable.
         # Since we don't have access to that info from jinja2 easily, it would be difficult to calculate
         # and offers little value being a small edge case.
-        walk_object(working_vars[key], lambda x: deps.update(_get_template_str_vars(x, environment)))
+        # Skip calculating dependencies, if the key is in the ignore list, meaning it has no dependencies
+        if key not in ignore_list:
+            walk_object(working_vars[key], lambda x: deps.update(_get_template_str_vars(x, environment)))
 
         var_map[key] = deps
 
@@ -293,12 +300,13 @@ def resolve_var_refs(source_vars:dict, environment:jinja2.Environment, inplace=F
             )
 
         for prockey in process_list:
-            # Template the variable and update 'new_vars'
-            working_vars[prockey] = walk_object(
-                working_vars[prockey],
-                lambda x: _template_if_string(x, environment, working_vars),
-                update=True
-            )
+            if prockey not in ignore_list:
+                # Template the variable and update 'new_vars', if it's not in the ignore_list
+                working_vars[prockey] = walk_object(
+                    working_vars[prockey],
+                    lambda x: _template_if_string(x, environment, working_vars),
+                    update=True
+                )
 
             # Remove the variable as a dependency for all other variables
             for key in var_map:
