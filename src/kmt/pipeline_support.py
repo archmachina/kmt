@@ -11,22 +11,25 @@ class PipelineSupportOrdering(types.PipelineSupportHandler):
         pass
 
     def post(self):
-        keys = [
-            "kmt_metadata_group",
-            "kmt_metadata_version",
-            "kmt_metadata_kind",
-            "kmt_metadata_namespace",
-            "kmt_metadata_name",
-        ]
+
+        def _get_metadata_str(manifest):
+            keys = [
+                "group",
+                "version",
+                "kind",
+                "namespace",
+                "name",
+            ]
+
+            info = util.extract_manifest_info(manifest, default_value="")
+
+            return ":".join([info.get(key, "") for key in keys])
 
         for manifest in self.pipeline.manifests:
-            data = tuple([manifest.vars.get(key, "") for key in keys])
-            logger.debug(f"metadata: {data}")
+            logger.debug(f"metadata: {_get_metadata_str(manifest)}")
 
         # Don't need a particular ordering, just consistency in output
         # to allow for easy diff comparison
-        self.pipeline.manifests = sorted(self.pipeline.manifests, key=lambda x: "".join([
-            x.vars.get(key, "") for key in keys
-        ]))
+        self.pipeline.manifests = sorted(self.pipeline.manifests, key=lambda x: _get_metadata_str(x))
 
 types.default_pipeline_support_handlers.append(PipelineSupportOrdering)

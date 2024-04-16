@@ -21,7 +21,7 @@ class StepSupportRefreshHash(types.StepSupportHandler):
         for manifest in self.state.working_manifests:
             manifest.refresh_hash()
 
-        logger.debug(f"RefreshHash: document short sum: {manifest.vars['shortsum']}")
+        logger.debug(f"RefreshHash: document short sum: {manifest.local_vars['shortsum']}")
 
 class StepSupportWhen(types.StepSupportHandler):
     def extract(self, step_def):
@@ -33,7 +33,7 @@ class StepSupportWhen(types.StepSupportHandler):
 
     def pre(self):
         working_manifests = self.state.working_manifests.copy()
-        templater = types.Templater(self.state.pipeline.common.environment, self.state.pipeline.vars)
+        templater = self.state.pipeline.get_templater()
 
         when = templater.resolve(self.when, (list, str))
         if isinstance(when, str):
@@ -47,7 +47,7 @@ class StepSupportWhen(types.StepSupportHandler):
                     return
 
         for manifest in working_manifests:
-            templater = types.Templater(self.state.pipeline.common.environment, manifest.vars)
+            templater = manifest.get_templater()
 
             filter = templater.resolve(self.filter, (list, str))
             if isinstance(filter, str):
@@ -81,7 +81,7 @@ class StepSupportTags(types.StepSupportHandler):
         working_manifests = self.state.working_manifests.copy()
 
         for manifest in working_manifests:
-            templater = types.Templater(self.state.pipeline.common.environment, manifest.vars)
+            templater = manifest.get_templater()
 
             match_any_tags = templater.resolve(self.match_any_tags, list)
             match_any_tags = set([templater.resolve(x, str) for x in match_any_tags])
@@ -112,7 +112,7 @@ class StepSupportTags(types.StepSupportHandler):
     def post(self):
 
         for manifest in self.state.working_manifests:
-            templater = types.Templater(self.state.pipeline.common.environment, manifest.vars)
+            templater = manifest.get_templater()
 
             apply_tags = templater.resolve(self.apply_tags, list)
             for tag in apply_tags:
@@ -134,15 +134,15 @@ class StepSupportMetadata(types.StepSupportHandler):
         working_manifests = self.state.working_manifests.copy()
 
         for manifest in working_manifests:
-            templater = types.Templater(self.state.pipeline.common.environment, manifest.vars)
+            templater = manifest.get_templater()
 
-            manifest.refresh_metadata()
+            info = util.extract_manifest_info(manifest.spec)
 
-            group = manifest.vars["kmt_metadata_group"]
-            version = manifest.vars["kmt_metadata_version"]
-            kind = manifest.vars["kmt_metadata_kind"]
-            namespace = manifest.vars["kmt_metadata_namespace"]
-            name = manifest.vars["kmt_metadata_name"]
+            group = info["group"]
+            version = info["version"]
+            kind = info["kind"]
+            namespace = info["namespace"]
+            name = info["name"]
 
             # k8s group match
             match_group = templater.resolve(self.match_group, (str, type(None)))

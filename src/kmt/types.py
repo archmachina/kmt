@@ -119,17 +119,17 @@ class Manifest:
         self.pipeline = pipeline
 
         self.tags = set()
-        self.unresolved_vars = {}
-        self.vars = {}
-
-        self.refresh_vars()
+        self.local_vars = {}
 
     def __str__(self):
         output = yamlwrap.dump(self.spec)
 
         return output
 
-    def refresh_vars(self):
+    def get_templater(self):
+
+        # Update metadata vars first
+        self.refresh_metadata()
 
         # Add builtin values
         builtin = {
@@ -139,33 +139,31 @@ class Manifest:
             "kmt_manifest": self.spec
         }
 
-        unresolved_vars = self.pipeline.unresolved_vars.copy()
-        unresolved_vars.update(self.unresolved_vars)
-        unresolved_vars.update(builtin)
+        effective_vars = self.pipeline.vars.copy()
+        effective_vars.update(self.local_vars)
+        effective_vars.update(builtin)
 
-        self.vars = util.resolve_var_refs(unresolved_vars, self.pipeline.common.environment, ignore_list=builtin.keys())
-
-        self.refresh_metadata()
+        return Templater(self.pipeline.common.environment, effective_vars)
 
     def refresh_metadata(self):
 
         info = util.extract_manifest_info(self.spec, default_value="")
 
-        self.vars["kmt_metadata_group"] = info["group"]
-        self.vars["kmt_metadata_version"] = info["version"]
-        self.vars["kmt_metadata_kind"] = info["kind"]
-        self.vars["kmt_metadata_api_version"] = info["api_version"]
-        self.vars["kmt_metadata_namespace"] = info["namespace"]
-        self.vars["kmt_metadata_name"] = info["name"]
+        self.local_vars["kmt_metadata_group"] = info["group"]
+        self.local_vars["kmt_metadata_version"] = info["version"]
+        self.local_vars["kmt_metadata_kind"] = info["kind"]
+        self.local_vars["kmt_metadata_api_version"] = info["api_version"]
+        self.local_vars["kmt_metadata_namespace"] = info["namespace"]
+        self.local_vars["kmt_metadata_name"] = info["name"]
 
     def refresh_hash(self):
 
         text = yaml.dump(self.spec)
 
-        self.vars["kmt_md5sum"] = util.hash_string(text, hash_type="md5", encoding="utf-8")
-        self.vars["kmt_sha1sum"] = util.hash_string(text, hash_type="sha1", encoding="utf-8")
-        self.vars["kmt_sha256sum"] = util.hash_string(text, hash_type="sha256", encoding="utf-8")
-        self.vars["kmt_shortsum"] = util.hash_string(text, hash_type="short8", encoding="utf-8")
+        self.local_vars["kmt_md5sum"] = util.hash_string(text, hash_type="md5", encoding="utf-8")
+        self.local_vars["kmt_sha1sum"] = util.hash_string(text, hash_type="sha1", encoding="utf-8")
+        self.local_vars["kmt_sha256sum"] = util.hash_string(text, hash_type="sha256", encoding="utf-8")
+        self.local_vars["kmt_shortsum"] = util.hash_string(text, hash_type="short8", encoding="utf-8")
 
 class Common:
     def __init__(self):
@@ -281,7 +279,6 @@ class Pipeline:
         self._input_manifests = manifests
         self.manifests = []
 
-        self.unresolved_vars = {}
         self.vars = {}
 
         #
@@ -355,33 +352,25 @@ class Pipeline:
         # Merge defaults, then supplied vars, then 'vars' in to the pipeline
         # Allows defaults to be overridden by the caller, but then 'vars'
         # can enforce a value, if required
-        self.unresolved_vars.update(config_defaults)
-        self.unresolved_vars.update(pipeline_vars)
-        self.unresolved_vars.update(config_vars)
-
-        # Refresh pipeline and all manifest vars
-        self.refresh_all_vars()
-
-    def refresh_all_vars(self):
-        """
-        Refresh vars for the pipeline and also call refresh on all manifests
-        """
+        unresolved_vars = {}
+        unresolved_vars.update(config_defaults)
+        unresolved_vars.update(pipeline_vars)
+        unresolved_vars.update(config_vars)
 
         # Add builtin pipeline vars
         builtin = {
             "env": os.environ.copy(),
             "kmt_manifests": self.manifests
         }
-        self.unresolved_vars.update(builtin)
+        unresolved_vars.update(builtin)
 
         # Resolve all vars from unresolved vars and store the result in the actual
         # vars property.
         # pipeline.vars can be used to access variables that have already been resolved
-        self.vars = util.resolve_var_refs(self.unresolved_vars, self.common.environment, ignore_list=builtin.keys())
+        self.vars = util.resolve_var_refs(unresolved_vars, self.common.environment, ignore_list=builtin.keys())
 
-        # Call refresh for all manifests
-        for manifest in self.manifests:
-            manifest.refresh_vars()
+    def get_templater(self):
+        return Templater(self.common.environment, self.vars)
 
     def run(self):
 

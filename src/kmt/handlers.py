@@ -26,7 +26,7 @@ class StepHandlerPipeline(types.StepHandler):
         self.pass_manifests = util.extract_property(step_def, "pass_manifests", default=False)
 
     def run(self):
-        templater = types.Templater(self.state.pipeline.common.environment, self.state.pipeline.vars)
+        templater = self.state.pipeline.get_templater()
 
         # Determine whether we pass manifests to the new pipeline
         # Filtering is done via normal support handlers e.g. when, tags, etc.
@@ -81,7 +81,7 @@ class StepHandlerImport(types.StepHandler):
         self.template = util.extract_property(step_def, "template", default=True)
 
     def run(self):
-        templater = types.Templater(self.state.pipeline.common.environment, self.state.pipeline.vars)
+        templater = self.state.pipeline.get_templater()
 
         filenames = set()
 
@@ -117,7 +117,7 @@ class StepHandlerImport(types.StepHandler):
 
             for doc in docs:
                 manifest = types.Manifest(doc, pipeline=self.state.pipeline)
-                manifest.vars["import_filename"] = filename
+                manifest.local_vars["import_filename"] = filename
 
                 self.state.pipeline.manifests.append(manifest)
                 self.state.working_manifests.append(manifest)
@@ -132,7 +132,7 @@ class StepHandlerVars(types.StepHandler):
 
     def run(self):
         working_manifests = self.state.working_manifests.copy()
-        templater = types.Templater(self.state.pipeline.common.environment, self.state.pipeline.vars)
+        templater = self.state.pipeline.get_templater()
 
         pipeline_var_list = templater.resolve(self.pipeline_var_list, (list, type(None)))
         if pipeline_var_list is not None:
@@ -154,7 +154,7 @@ class StepHandlerVars(types.StepHandler):
                 logger.debug(f"Set pipeline var {key} -> {value}")
 
         for manifest in working_manifests:
-            templater = types.Templater(self.state.pipeline.common.environment, manifest.vars)
+            templater = manifest.get_templater()
 
             manifest_var_list = templater.resolve(self.manifest_var_list, (list, type(None)))
 
@@ -179,7 +179,7 @@ class StepHandlerVars(types.StepHandler):
                         self.state.pipeline.vars[key] = value
                         logger.debug(f"Set pipeline var {key} -> {value}")
                     else:
-                        manifest.vars[key] = value
+                        manifest.local_vars[key] = value
                         logger.debug(f"Set manifest var {key} -> {value}")
 
 class StepHandlerStdin(types.StepHandler):
@@ -190,7 +190,7 @@ class StepHandlerStdin(types.StepHandler):
         self.template = util.extract_property(step_def, "template", default=True)
 
     def run(self):
-        templater = types.Templater(self.state.pipeline.common.environment, self.state.pipeline.vars)
+        templater = self.state.pipeline.get_templater()
 
         template = templater.resolve(self.template, bool)
 
@@ -222,7 +222,7 @@ class StepHandlerRefreshHash(types.StepHandler):
         for manifest in self.state.working_manifests:
             manifest.refresh_hash()
 
-            logger.debug(f"RefreshHash: manifest short sum: {manifest.vars['kmt_shortsum']}")
+            logger.debug(f"RefreshHash: manifest short sum: {manifest.local_vars['kmt_shortsum']}")
 
 class StepHandlerJsonPatch(types.StepHandler):
     def extract(self, step_def):
@@ -232,7 +232,7 @@ class StepHandlerJsonPatch(types.StepHandler):
         working_manifests = self.state.working_manifests.copy()
 
         for manifest in working_manifests:
-            templater = types.Templater(self.state.pipeline.common.environment, manifest.vars)
+            templater = manifest.get_templater()
 
             # Apply the patches to the manifest object
             patches = templater.resolve(self.patches, list)
@@ -267,7 +267,7 @@ class StepHandlerMetadata(types.StepHandler):
         working_manifests = self.state.working_manifests.copy()
 
         for manifest in working_manifests:
-            templater = types.Templater(self.state.pipeline.common.environment, manifest.vars)
+            templater = manifest.get_templater()
 
             spec = manifest.spec
 
