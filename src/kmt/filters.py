@@ -26,14 +26,16 @@ def filter_base64_decode(value, encoding="utf-8"):
     bytes = value.encode("utf-8")
     return base64.b64decode(bytes).decode(encoding)
 
-def filter_include_file(filename, encoding="utf-8"):
+@pass_context
+def filter_include_file_str(context, filename, template=False, encoding="utf-8"):
     with open(filename, "r", encoding=encoding) as file:
         content = file.read()
 
-    return content
+    if template:
+        template_obj = context.environment.from_string(content)
+        content = template_obj.render(context.parent)
 
-def filter_json_escape(value):
-    return (json.dumps(str(value)))[1:-1]
+    return (json.dumps(str(content)))[1:-1]
 
 @pass_context
 def filter_lookup_manifest_name(context, pattern: str, spec:dict=None):
@@ -80,8 +82,7 @@ def filter_env(name, default=None):
 core.default_filters["hash_string"] = filter_hash_string
 core.default_filters["b64encode"] = filter_base64_encode
 core.default_filters["b64decode"] = filter_base64_decode
-core.default_filters["include_file"] = filter_include_file
-core.default_filters["json_escape"] = filter_json_escape
+core.default_filters["include_file_str"] = filter_include_file_str
 core.default_filters["lookup_manifest"] = filter_lookup_manifest
 core.default_filters["lookup_manifest_name"] = filter_lookup_manifest_name
 core.default_filters["hash_manifest"] = filter_hash_manifest

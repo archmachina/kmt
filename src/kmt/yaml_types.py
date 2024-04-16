@@ -49,7 +49,7 @@ class LookupName(YamlTag):
         metadata = item.spec.get("metadata")
         if not isinstance(metadata, dict):
             raise exception.KMTManifestException("Invalid metadata on manifest")
-        
+
         name = metadata.get("name")
         if not isinstance(name, str):
             raise exception.KMTManifestException("Invalid name in manifest metadata")
