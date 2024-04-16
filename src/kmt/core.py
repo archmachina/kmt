@@ -42,16 +42,20 @@ class Manifest:
         # Add builtin values
         builtin = {
             "env": os.environ.copy(),
-            "kmt_manifests": self.pipeline.manifests,
+            "kmt_manifests": [x.spec for x in self.pipeline.manifests],
             "kmt_tags": list(self.tags),
-            "kmt_manifest": self
+            "kmt_manifest": self.spec
         }
 
         effective_vars = self.pipeline.vars.copy()
         effective_vars.update(self.local_vars)
         effective_vars.update(builtin)
 
-        return Templater(self.pipeline.common.environment, effective_vars)
+        overlay = self.pipeline.environment.overlay()
+        overlay.kmt_pipeline = self.pipeline
+        overlay.kmt_manifest = self
+
+        return Templater(overlay, effective_vars)
 
     def refresh_metadata(self):
 
@@ -80,6 +84,9 @@ class Manifest:
 class Common:
     def __init__(self):
         self.environment = jinja2.Environment()
+
+        # Make sure the jinja2 environment has these properties
+        self.environment.extend(kmt_pipeline=None, kmt_manifest=None)
 
         self.handlers = copy.copy(default_handlers)
         self.step_support_handlers = copy.copy(default_step_support_handlers)
@@ -272,7 +279,7 @@ class Pipeline:
         # Add builtin pipeline vars
         builtin = {
             "env": os.environ.copy(),
-            "kmt_manifests": self.manifests
+            "kmt_manifests": [x.spec for x in self.manifests]
         }
         unresolved_vars.update(builtin)
 
@@ -282,7 +289,11 @@ class Pipeline:
         self.vars = util.resolve_var_refs(unresolved_vars, self.common.environment, ignore_list=builtin.keys())
 
     def get_templater(self):
-        return Templater(self.common.environment, self.vars)
+        overlay = self.common.environment.overlay()
+        overlay.kmt_pipeline = self
+        overlay.kmt_manifest = None
+
+        return Templater(overlay, self.vars)
 
     def run(self):
 

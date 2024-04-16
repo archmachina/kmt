@@ -46,7 +46,11 @@ def filter_lookup_manifest_name(context, pattern: str, spec:dict=None):
 
     lookup = yaml_types.LookupName(spec)
 
-    item = lookup.resolve(context.parent["kmt_manifest"])
+    scope = context.environment.kmt_manifest
+    if scope is None:
+        scope = context.environment.kmt_pipeline
+
+    item = lookup.resolve(scope)
 
     return item
 
@@ -59,7 +63,11 @@ def filter_lookup_manifest(context, pattern: str, spec:dict=None):
 
     lookup = yaml_types.Lookup(spec)
 
-    item = lookup.resolve(context.parent["kmt_manifest"])
+    scope = context.environment.kmt_manifest
+    if scope is None:
+        scope = context.environment.kmt_pipeline
+
+    item = lookup.resolve(scope)
 
     return item
 
@@ -69,10 +77,15 @@ def filter_hash_manifest(context, pattern: str, spec:dict=None, hash_type:str="s
     if spec is None:
         spec = {}
     spec["pattern"] = pattern
+    spec["hash_type"] = hash_type
 
     lookup = yaml_types.LookupHash(spec)
 
-    item = lookup.resolve(context.parent["kmt_manifest"])
+    scope = context.environment.kmt_manifest
+    if scope is None:
+        scope = context.environment.kmt_pipeline
+
+    item = lookup.resolve(scope)
 
     return item
 

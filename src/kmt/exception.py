@@ -48,3 +48,8 @@ class KMTUnimplementedException(Exception):
     """
     Functionality has not been implemented
     """
+
+class KMTTemplateException(Exception):
+    """
+    Error performing templating
+    """
