@@ -42,9 +42,11 @@ def filter_lookup_manifest_name(context, pattern: str, spec:dict=None):
         spec = {}
     spec["pattern"] = pattern
 
-    item = lookup_manifest(context, spec)
+    lookup = yaml_types.LookupName(spec)
 
-    return item.spec["metadata"]["name"]
+    item = lookup.resolve(context.parent["kmt_manifest"])
+
+    return item
 
 @pass_context
 def filter_lookup_manifest(context, pattern: str, spec:dict=None):
@@ -53,9 +55,11 @@ def filter_lookup_manifest(context, pattern: str, spec:dict=None):
         spec = {}
     spec["pattern"] = pattern
 
-    item = lookup_manifest(context, spec)
+    lookup = yaml_types.Lookup(spec)
 
-    return item.spec
+    item = lookup.resolve(context.parent["kmt_manifest"])
+
+    return item
 
 @pass_context
 def filter_hash_manifest(context, pattern: str, spec:dict=None, hash_type:str="sha1"):
@@ -64,19 +68,9 @@ def filter_hash_manifest(context, pattern: str, spec:dict=None, hash_type:str="s
         spec = {}
     spec["pattern"] = pattern
 
-    # Retrieve the manifest
-    item = lookup_manifest(context, spec)
+    lookup = yaml_types.LookupHash(spec)
 
-    # Convert the manifest spec to byte encoding
-    text = yaml.dump(item.spec)
-
-    return util.hash_string(text, hash_type=hash_type)
-
-def lookup_manifest(context, spec):
-    lookup = yaml_types.Lookup(spec)
-
-    item = lookup.find_match(context.parent["kmt_manifests"],
-        current_namespace=context.parent.get("kmt_namespace"))
+    item = lookup.resolve(context.parent["kmt_manifest"])
 
     return item
 

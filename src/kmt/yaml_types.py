@@ -7,93 +7,96 @@ import kmt.util as util
 
 #
 # Manifest name lookups
-class Lookup:
+#
+# Performs lookups of manifests based on search keys
+
+class YamlTag:
+    def resolve(self, manifest:core.Manifest):
+        raise exception.KMTUnimplementedException("Unimplemented")
+
+class Lookup(YamlTag):
     def __init__(self, spec):
         util.validate(isinstance(spec, dict), "Invalid specification passed to Lookup")
 
         self.spec = spec.copy()
+        util.check_find_manifests_keys(self.spec)
 
-        allowed_keys = [
-            "group",
-            "version",
-            "kind",
-            "api_version",
-            "namespace",
-            "pattern"
-        ]
+    def resolve(self, manifest):
+        current_namespace = None
+        metadata = manifest.spec.get("metadata")
+        if metadata is not None:
+            current_namespace = metadata.get("namespace")
 
-        errored = []
-        for key in self.spec.keys():
-            if key not in allowed_keys or not isinstance(self.spec[key], str):
-                errored.append(key)
+        manifest = util.find_manifests(self.spec, manifest.pipeline.manifests, multiple=False, current_namespace=current_namespace)
 
-        if len(errored) > 0:
-            raise exception.PipelineRunException(f"Invalid keys or invalid key value found on lookup: {errored}")
+        return manifest.spec
 
-    def find_matches(self, manifests, *, current_namespace=None):
-        return self._find(manifests, multiple=True, current_namespace=current_namespace)
+class LookupName(YamlTag):
+    def __init__(self, spec):
+        util.validate(isinstance(spec, dict), "Invalid specification passed to LookupName")
 
-    def find_match(self, manifests, *, current_namespace=None):
-        return self._find(manifests, multiple=False, current_namespace=current_namespace)
+        self.spec = spec.copy()
+        util.check_find_manifests_keys(self.spec)
 
-    def _find(self, manifests, *, multiple, current_namespace=None):
-        util.validate(isinstance(manifests, list) and all(isinstance(x, core.Manifest) for x in manifests),
-            "Invalid manifests provided to Lookup find")
+    def resolve(self, manifest):
+        current_namespace = None
+        metadata = manifest.spec.get("metadata")
+        if metadata is not None:
+            current_namespace = metadata.get("namespace")
 
-        matches = []
+        item = util.find_manifests(self.spec, manifest.pipeline.manifests, multiple=False, current_namespace=current_namespace)
 
-        for manifest in manifests:
+        metadata = item.spec.get("metadata")
+        if not isinstance(metadata, dict):
+            raise exception.KMTManifestException("Invalid metadata on manifest")
+        
+        name = metadata.get("name")
+        if not isinstance(name, str):
+            raise exception.KMTManifestException("Invalid name in manifest metadata")
 
-            info = util.extract_manifest_info(manifest)
+        return name
 
-            if "group" in self.spec and self.spec["group"] != info["group"]:
-                continue
+class LookupHash(YamlTag):
+    def __init__(self, spec):
+        util.validate(isinstance(spec, dict), "Invalid specification passed to LookupHash")
 
-            if "version" in self.spec and self.spec["version"] != info["version"]:
-                continue
+        self.spec = spec.copy()
 
-            if "kind" in self.spec and self.spec["kind"] != info["kind"]:
-                continue
+        hash_type = "sha1"
+        if "hash_type" in self.spec:
+            hash_type = self.spec.pop("hash_type")
 
-            if "api_version" in self.spec and self.spec["api_version"] != info["api_version"]:
-                continue
+        util.check_find_manifests_keys(self.spec)
 
-            if "namespace" in self.spec:
-                if self.spec["namespace"] != info["namespace"]:
-                    continue
-            elif info["namespace"] is not None and info["namespace"] != current_namespace:
-                # If no namespace has been defined in the lookup, we will match on
-                # the current namespace and any resource without a namespace.
-                continue
+        self.spec["hash_type"] = hash_type
 
-            if "pattern" in self.spec and not re.search(self.spec["pattern"], info["name"]):
-                continue
+    def resolve(self, manifest):
+        current_namespace = None
+        metadata = manifest.spec.get("metadata")
+        if metadata is not None:
+            current_namespace = metadata.get("namespace")
 
-            matches.append(manifest)
+        item = util.find_manifests(self.spec, manifest.pipeline.manifests, multiple=False, current_namespace=current_namespace)
 
-        if multiple:
-            return matches
-
-        if len(matches) == 0:
-            raise exception.PipelineRunException("Could not find a matching object for Lookup find")
-
-        if len(matches) > 1:
-            raise exception.PipelineRunException("Could not find a single object for Lookup find. Multiple object matches")
-
-        return matches[0]
-
+        return util.hash_manifest(item.spec, hash_type=self.spec["hash_type"])
 
 def lookup_representer(dumper: yaml.SafeDumper, lookup: Lookup):
     return dumper.represent_mapping("!lookup", lookup.spec)
 
+def lookup_name_representer(dumper: yaml.SafeDumper, lookup_name: LookupName):
+    return dumper.represent_mapping("!lookup_name", lookup_name.spec)
+
+def lookup_hash_representer(dumper: yaml.SafeDumper, lookup_hash: LookupHash):
+    return dumper.represent_mapping("!lookup_hash", lookup_hash.spec)
+
 def lookup_constructor(loader: yaml.SafeLoader, node: yaml.nodes.MappingNode):
     return Lookup(spec=loader.construct_mapping(node))
 
-yaml.SafeDumper.add_representer(Lookup, lookup_representer)
-yaml.Dumper.add_representer(Lookup, lookup_representer)
+def lookup_name_constructor(loader: yaml.SafeLoader, node: yaml.nodes.MappingNode):
+    return LookupName(spec=loader.construct_mapping(node))
 
-yaml.SafeLoader.add_constructor("!lookup", lookup_constructor)
-yaml.Loader.add_constructor("!lookup", lookup_constructor)
+def lookup_hash_constructor(loader: yaml.SafeLoader, node: yaml.nodes.MappingNode):
+    return LookupHash(spec=loader.construct_mapping(node))
 
 #
 # String representer
@@ -104,5 +107,27 @@ def str_representer(dumper, data):
         return dumper.represent_scalar("tag:yaml.org,2002:str", data, style="|")
     return dumper.represent_scalar("tag:yaml.org,2002:str", data)
 
-yaml.SafeDumper.add_representer(str, str_representer)
-yaml.Dumper.add_representer(str, str_representer)
+#
+# yaml representers
+representers = [
+    (str, str_representer),
+    (Lookup, lookup_representer),
+    (LookupName, lookup_name_representer),
+    (LookupHash, lookup_hash_representer)
+]
+
+for type_ref, representer in representers:
+    yaml.SafeDumper.add_representer(type_ref, representer)
+    yaml.Dumper.add_representer(type_ref, representer)
+
+#
+# yaml constructors
+constructors = [
+    ("!lookup", lookup_constructor),
+    ("!lookup_name", lookup_name_constructor),
+    ("!lookup_hash", lookup_hash_constructor)
+]
+
+for type_ref, constructor in constructors:
+    yaml.SafeLoader.add_constructor(type_ref, constructor)
+    yaml.Loader.add_constructor(type_ref, constructor)

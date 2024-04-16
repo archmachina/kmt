@@ -44,7 +44,7 @@ class Manifest:
             "env": os.environ.copy(),
             "kmt_manifests": self.pipeline.manifests,
             "kmt_tags": list(self.tags),
-            "kmt_manifest": self.spec
+            "kmt_manifest": self
         }
 
         effective_vars = self.pipeline.vars.copy()
@@ -66,7 +66,11 @@ class Manifest:
 
     def refresh_hash(self):
 
-        text = yaml.dump(self.spec)
+        new_spec = self.spec.copy()
+        if "metadata" in new_spec:
+            new_spec.pop("metadata")
+
+        text = yaml.dump(new_spec)
 
         self.local_vars["kmt_md5sum"] = util.hash_string(text, hash_type="md5", encoding="utf-8")
         self.local_vars["kmt_sha1sum"] = util.hash_string(text, hash_type="sha1", encoding="utf-8")
@@ -293,21 +297,8 @@ class Pipeline:
         return manifests
 
     def _resolve_reference(self, current_manifest, item):
-        if isinstance(item, yaml_types.Lookup):
-            current_namespace = None
-            metadata = current_manifest.spec.get('metadata')
-            if metadata is not None:
-                current_namespace = metadata.get("namespace")
-
-            manifest = item.find_match(self.manifests, current_namespace=current_namespace)
-
-            metadata = manifest.spec.get("metadata")
-            util.validate(isinstance(metadata, dict), f"Invalid metadata on object in _resolve_reference: {type(metadata)}")
-
-            name = metadata.get("name")
-            util.validate(isinstance(name, str), f"Invalid name on object in _resolve_reference: {type(name)}")
-
-            return name
+        if isinstance(item, yaml_types.YamlTag):
+            return item.resolve(current_manifest)
 
         return item
 

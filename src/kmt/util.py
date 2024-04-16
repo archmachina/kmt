@@ -5,6 +5,7 @@ import textwrap
 import yaml
 import copy
 import jinja2
+import re
 
 from jinja2.meta import find_undeclared_variables
 
@@ -50,6 +51,19 @@ def hash_object(source, hash_type="sha1"):
     validate(source is not None, "Invalid source supplied to hash_object")
 
     text = yaml.dump(source)
+
+    return hash_string(text, hash_type=hash_type)
+
+def hash_manifest(source, hash_type="sha1"):
+    validate(source is not None, "Invalid source supplied to hash_manifest")
+
+    new_obj = source.copy()
+
+    # Metadata changes shouldn't affect the hash
+    if "metadata" in new_obj:
+        new_obj.pop("metadata")
+
+    text = yaml.dump(new_obj)
 
     return hash_string(text, hash_type=hash_type)
 
@@ -345,3 +359,74 @@ def yaml_load_all(source):
     loader = yaml.SafeLoader
 
     return yaml.load_all(source, Loader=loader)
+
+def check_find_manifests_keys(search:dict):
+    validate(isinstance(search, dict), "Invalid search supplied to check_find_manifests_keys")
+
+    allowed_keys = [
+        "group",
+        "version",
+        "kind",
+        "api_version",
+        "namespace",
+        "pattern"
+    ]
+
+    errored = []
+    for key in search.keys():
+        if key not in allowed_keys or not isinstance(search[key], str):
+            errored.append(key)
+
+    if len(errored) > 0:
+        raise exception.PipelineRunException(f"Invalid keys or invalid key value found on lookup: {errored}")
+
+def find_manifests(search, manifests, *, multiple, current_namespace=None):
+    validate(isinstance(search, dict) and all(isinstance(x, (str, type(None))) for x in search.values()),
+        "Invalid search criteria provided to find_manifests")
+    validate(isinstance(manifests, list) and all(isinstance(x, core.Manifest) for x in manifests),
+        "Invalid manifests provided to find_manifests")
+    validate(isinstance(multiple, bool), "Invalid multiple parameter to find_manifests")
+    validate(current_namespace is None or isinstance(current_namespace, str),
+        "Invalid current_namespace provided to find_manifests")
+
+    matches = []
+
+    for manifest in manifests:
+
+        info = extract_manifest_info(manifest)
+
+        if "group" in search and search["group"] != info["group"]:
+            continue
+
+        if "version" in search and search["version"] != info["version"]:
+            continue
+
+        if "kind" in search and search["kind"] != info["kind"]:
+            continue
+
+        if "api_version" in search and search["api_version"] != info["api_version"]:
+            continue
+
+        if "namespace" in search:
+            if search["namespace"] != info["namespace"]:
+                continue
+        elif info["namespace"] is not None and info["namespace"] != current_namespace:
+            # If no namespace has been defined in the lookup, we will match on
+            # the current namespace and any resource without a namespace.
+            continue
+
+        if "pattern" in search and search["pattern"] is not None and not re.search(search["pattern"], info["name"]):
+            continue
+
+        matches.append(manifest)
+
+    if multiple:
+        return matches
+
+    if len(matches) == 0:
+        raise exception.PipelineRunException("Could not find a matching object in find_manifests")
+
+    if len(matches) > 1:
+        raise exception.PipelineRunException("Could not find a single object in find_manifests. Multiple object matches")
+
+    return matches[0]

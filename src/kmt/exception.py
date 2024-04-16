@@ -38,3 +38,13 @@ class KMTResolveException(Exception):
     """
     Error resolving variable references
     """
+
+class KMTManifestException(Exception):
+    """
+    Error in the structure or content of the manifest
+    """
+
+class KMTUnimplementedException(Exception):
+    """
+    Functionality has not been implemented
+    """
