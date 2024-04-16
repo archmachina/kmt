@@ -424,9 +424,9 @@ def find_manifests(search, manifests, *, multiple, current_namespace=None):
         return matches
 
     if len(matches) == 0:
-        raise exception.PipelineRunException("Could not find a matching object in find_manifests")
+        raise exception.PipelineRunException(f"Could not find a matching object in find_manifests. search: {search}")
 
     if len(matches) > 1:
-        raise exception.PipelineRunException("Could not find a single object in find_manifests. Multiple object matches")
+        raise exception.PipelineRunException(f"Could not find a single object in find_manifests. Multiple object matches. search: {search}")
 
     return matches[0]

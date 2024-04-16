@@ -95,6 +95,92 @@ class LookupHash(YamlTag):
 
         return util.hash_manifest(item.spec, hash_type=self.spec["hash_type"])
 
+class LookupConfigMap(YamlTag):
+    def __init__(self, name):
+        util.validate(isinstance(name, str), "Invalid name passed to LookupConfigMap")
+
+        self.name = name
+
+    def resolve(self, scope):
+        current_namespace = self.get_current_namespace(scope)
+        manifests = self.get_manifests(scope)
+
+        spec = {
+            "kind": "ConfigMap"
+        }
+
+        results = util.find_manifests(spec, manifests, multiple=True, current_namespace=current_namespace)
+
+        matches = []
+        for manifest in results:
+            metadata = manifest.spec.get("metadata")
+            if metadata is None:
+                continue
+
+            annotations = metadata.get("annotations")
+            if annotations is None:
+                continue
+
+            original_name = annotations.get("kmt/original-name")
+            if original_name is None:
+                continue
+
+            if original_name == self.name:
+                matches.append(manifest)
+
+        if len(matches) < 0:
+            raise exception.KMTTemplateException(f"Could not find matching configmap: {self.name}")
+
+        if len(matches) > 1:
+            raise exception.KMTTemplateException(f"Found multiple matches for configmap: {self.name}")
+
+        info = util.extract_manifest_info(matches[0].spec)
+
+        return info["name"]
+
+class LookupSecret(YamlTag):
+    def __init__(self, name):
+        util.validate(isinstance(name, str), "Invalid name passed to LookupSecret")
+
+        self.name = name
+
+    def resolve(self, scope):
+        current_namespace = self.get_current_namespace(scope)
+        manifests = self.get_manifests(scope)
+
+        spec = {
+            "kind": "Secret"
+        }
+
+        results = util.find_manifests(spec, manifests, multiple=True, current_namespace=current_namespace)
+
+        matches = []
+        for manifest in results:
+            metadata = manifest.spec.get("metadata")
+            if metadata is None:
+                continue
+
+            annotations = metadata.get("annotations")
+            if annotations is None:
+                continue
+
+            original_name = annotations.get("kmt/original-name")
+            if original_name is None:
+                continue
+
+            if original_name == self.name:
+                matches.append(manifest)
+
+        if len(matches) < 0:
+            raise exception.KMTTemplateException(f"Could not find matching secret: {self.name}")
+
+        if len(matches) > 1:
+            raise exception.KMTTemplateException(f"Found multiple matches for secret: {self.name}")
+
+        info = util.extract_manifest_info(matches[0].spec)
+
+        return info["name"]
+
 def lookup_representer(dumper: yaml.SafeDumper, lookup: Lookup):
     return dumper.represent_mapping("!lookup", lookup.spec)
 
@@ -104,6 +190,13 @@ def lookup_name_representer(dumper: yaml.SafeDumper, lookup_name: LookupName):
 def lookup_hash_representer(dumper: yaml.SafeDumper, lookup_hash: LookupHash):
     return dumper.represent_mapping("!lookup_hash", lookup_hash.spec)
 
+def lookup_configmap_representer(dumper: yaml.SafeDumper, lookup_configmap: LookupConfigMap):
+    return dumper.represent_str("!configmap", lookup_configmap.name)
+
+def lookup_secret_representer(dumper: yaml.SafeDumper, lookup_secret: LookupSecret):
+    return dumper.represent_str("!secret", lookup_secret.name)
+
+
 def lookup_constructor(loader: yaml.SafeLoader, node: yaml.nodes.MappingNode):
     return Lookup(spec=loader.construct_mapping(node))
 
@@ -112,6 +205,13 @@ def lookup_name_constructor(loader: yaml.SafeLoader, node: yaml.nodes.MappingNod
 
 def lookup_hash_constructor(loader: yaml.SafeLoader, node: yaml.nodes.MappingNode):
     return LookupHash(spec=loader.construct_mapping(node))
+
+def lookup_configmap_constructor(loader: yaml.SafeLoader, node: yaml.nodes.MappingNode):
+    return LookupConfigMap(name=loader.construct_yaml_str(node))
+
+def lookup_secret_constructor(loader: yaml.SafeLoader, node: yaml.nodes.MappingNode):
+    return LookupSecret(name=loader.construct_yaml_str(node))
+
 
 #
 # String representer
@@ -128,7 +228,9 @@ representers = [
     (str, str_representer),
     (Lookup, lookup_representer),
     (LookupName, lookup_name_representer),
-    (LookupHash, lookup_hash_representer)
+    (LookupHash, lookup_hash_representer),
+    (LookupConfigMap, lookup_configmap_representer),
+    (LookupSecret, lookup_secret_representer)
 ]
 
 for type_ref, representer in representers:
@@ -140,7 +242,9 @@ for type_ref, representer in representers:
 constructors = [
     ("!lookup", lookup_constructor),
     ("!lookup_name", lookup_name_constructor),
-    ("!lookup_hash", lookup_hash_constructor)
+    ("!lookup_hash", lookup_hash_constructor),
+    ("!configmap", lookup_configmap_constructor),
+    ("!secret", lookup_secret_constructor)
 ]
 
 for type_ref, constructor in constructors:

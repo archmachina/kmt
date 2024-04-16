@@ -30,6 +30,22 @@ class Manifest:
         self.tags = set()
         self.local_vars = {}
 
+        # Make sure each spec has some minimum configuration
+        metadata = self.spec.get("metadata")
+        if metadata is None:
+            metadata = {}
+            self.spec["metadata"] = metadata
+
+        annotations = metadata.get("annotations")
+        if annotations is None:
+            annotations = {}
+            metadata["annotations"] = annotations
+
+        name = metadata.get("name")
+        if name is not None and "kmt/original-name" not in annotations:
+            annotations["kmt/original-name"] = name
+
+
     def __str__(self):
         output = util.yaml_dump(self.spec)
 
