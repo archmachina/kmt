@@ -6,9 +6,10 @@ import re
 import yaml
 import os
 
-from . import types
-from . import util
-from .exception import PipelineRunException
+import kmt.core as core
+import kmt.util as util
+import kmt.exception as exception
+import kmt.yaml_types as yaml_types
 
 from jinja2 import pass_context
 
@@ -72,7 +73,7 @@ def filter_hash_manifest(context, pattern: str, spec:dict=None, hash_type:str="s
     return util.hash_string(text, hash_type=hash_type)
 
 def lookup_manifest(context, spec):
-    lookup = types.Lookup(spec)
+    lookup = yaml_types.Lookup(spec)
 
     item = lookup.find_match(context.parent["kmt_manifests"],
         current_namespace=context.parent.get("kmt_namespace"))
@@ -82,12 +83,12 @@ def lookup_manifest(context, spec):
 def filter_env(name, default=None):
     return os.environ.get(name, default)
 
-types.default_filters["hash_string"] = filter_hash_string
-types.default_filters["b64encode"] = filter_base64_encode
-types.default_filters["b64decode"] = filter_base64_decode
-types.default_filters["include_file"] = filter_include_file
-types.default_filters["json_escape"] = filter_json_escape
-types.default_filters["lookup_manifest"] = filter_lookup_manifest
-types.default_filters["lookup_manifest_name"] = filter_lookup_manifest_name
-types.default_filters["hash_manifest"] = filter_hash_manifest
-types.default_filters["env"] = filter_env
+core.default_filters["hash_string"] = filter_hash_string
+core.default_filters["b64encode"] = filter_base64_encode
+core.default_filters["b64decode"] = filter_base64_decode
+core.default_filters["include_file"] = filter_include_file
+core.default_filters["json_escape"] = filter_json_escape
+core.default_filters["lookup_manifest"] = filter_lookup_manifest
+core.default_filters["lookup_manifest_name"] = filter_lookup_manifest_name
+core.default_filters["hash_manifest"] = filter_hash_manifest
+core.default_filters["env"] = filter_env

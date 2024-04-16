@@ -1,12 +1,11 @@
 import logging
-import yaml
 
-from . import util
-from . import types
+import kmt.util as util
+import kmt.core as core
 
 logger = logging.getLogger(__name__)
 
-class PipelineSupportOrdering(types.PipelineSupportHandler):
+class PipelineSupportOrdering(core.PipelineSupportHandler):
     def pre(self):
         pass
 
@@ -32,4 +31,4 @@ class PipelineSupportOrdering(types.PipelineSupportHandler):
         # to allow for easy diff comparison
         self.pipeline.manifests = sorted(self.pipeline.manifests, key=lambda x: _get_metadata_str(x))
 
-types.default_pipeline_support_handlers.append(PipelineSupportOrdering)
+core.default_pipeline_support_handlers.append(PipelineSupportOrdering)

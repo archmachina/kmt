@@ -3,12 +3,12 @@ import copy
 import yaml
 import re
 
-from . import util
-from . import types
+import kmt.util as util
+import kmt.core as core
 
 logger = logging.getLogger(__name__)
 
-class StepSupportRefreshHash(types.StepSupportHandler):
+class StepSupportRefreshHash(core.StepSupportHandler):
     """
     """
     def extract(self, step_def):
@@ -23,7 +23,7 @@ class StepSupportRefreshHash(types.StepSupportHandler):
 
         logger.debug(f"RefreshHash: document short sum: {manifest.local_vars['shortsum']}")
 
-class StepSupportWhen(types.StepSupportHandler):
+class StepSupportWhen(core.StepSupportHandler):
     def extract(self, step_def):
         # When condition
         self.when = util.extract_property(step_def, "when", default=[])
@@ -63,7 +63,7 @@ class StepSupportWhen(types.StepSupportHandler):
     def post(self):
         pass
 
-class StepSupportTags(types.StepSupportHandler):
+class StepSupportTags(core.StepSupportHandler):
     def extract(self, step_def):
         # Extract match any tags
         self.match_any_tags = util.extract_property(step_def, "match_any_tags", default=[])
@@ -118,7 +118,7 @@ class StepSupportTags(types.StepSupportHandler):
             for tag in apply_tags:
                 manifest.tags.add(templater.resolve(tag, str))
 
-class StepSupportMetadata(types.StepSupportHandler):
+class StepSupportMetadata(core.StepSupportHandler):
     def extract(self, step_def):
         self.match_group = util.extract_property(step_def, "match_group")
 
@@ -181,7 +181,7 @@ class StepSupportMetadata(types.StepSupportHandler):
     def post(self):
         pass
 
-types.default_step_support_handlers.append(StepSupportMetadata)
-types.default_step_support_handlers.append(StepSupportTags)
-types.default_step_support_handlers.append(StepSupportWhen)
-# types.default_step_support_handlers.append(StepSupportRefreshHash)
+core.default_step_support_handlers.append(StepSupportMetadata)
+core.default_step_support_handlers.append(StepSupportTags)
+core.default_step_support_handlers.append(StepSupportWhen)
+# core.default_step_support_handlers.append(StepSupportRefreshHash)

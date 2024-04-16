@@ -6,10 +6,11 @@ import yaml
 import copy
 import jinja2
 
-from . import exception
-from . import types
-from . import yamlwrap
 from jinja2.meta import find_undeclared_variables
+
+import kmt.yaml_types as yaml_types
+import kmt.exception as exception
+import kmt.core as core
 
 logger = logging.getLogger(__name__)
 
@@ -53,9 +54,9 @@ def hash_object(source, hash_type="sha1"):
     return hash_string(text, hash_type=hash_type)
 
 def extract_manifest_info(manifest, default_value=None):
-    validate(isinstance(manifest, (dict, types.Manifest)), "Invalid manifest supplied to extract_manifest_info")
+    validate(isinstance(manifest, (dict, core.Manifest)), "Invalid manifest supplied to extract_manifest_info")
 
-    if isinstance(manifest, types.Manifest):
+    if isinstance(manifest, core.Manifest):
         manifest = manifest.spec
 
     # api version
@@ -193,7 +194,7 @@ def coerce_value(types, val):
         if isinstance(val, str):
             try:
                 if parsed is None:
-                    parsed = yamlwrap.load(val)
+                    parsed = yaml_load(val)
 
                 if isinstance(parsed, type_item):
                     return parsed
@@ -324,3 +325,23 @@ def _template_if_string(source, environment:jinja2.Environment, template_vars:di
 
     template = environment.from_string(source)
     return template.render(template_vars)
+
+def yaml_dump(source):
+    dumper = yaml.SafeDumper
+
+    return yaml.dump(source, Dumper=dumper, explicit_start=True, sort_keys=False, indent=2)
+
+def yaml_dump_all(source):
+    dumper = yaml.SafeDumper
+
+    return yaml.dump_all(source, Dumper=dumper, explicit_start=True, sort_keys=False, indent=2)
+
+def yaml_load(source):
+    loader = yaml.SafeLoader
+
+    return yaml.load(source, Loader=loader)
+
+def yaml_load_all(source):
+    loader = yaml.SafeLoader
+
+    return yaml.load_all(source, Loader=loader)
