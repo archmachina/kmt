@@ -27,7 +27,7 @@ def filter_base64_decode(value, encoding="utf-8"):
     return base64.b64decode(bytes).decode(encoding)
 
 @pass_context
-def filter_include_file_str(context, filename, template=False, encoding="utf-8"):
+def global_include_file_str(context, filename, template=False, encoding="utf-8"):
     with open(filename, "r", encoding=encoding) as file:
         content = file.read()
 
@@ -38,13 +38,9 @@ def filter_include_file_str(context, filename, template=False, encoding="utf-8")
     return (json.dumps(str(content)))[1:-1]
 
 @pass_context
-def filter_lookup_manifest_name(context, pattern: str, spec:dict=None):
+def global_lookup_manifest_name(context, **kwargs):
 
-    if spec is None:
-        spec = {}
-    spec["pattern"] = pattern
-
-    lookup = yaml_types.LookupName(spec)
+    lookup = yaml_types.LookupName(kwargs)
 
     scope = context.environment.kmt_manifest
     if scope is None:
@@ -55,13 +51,9 @@ def filter_lookup_manifest_name(context, pattern: str, spec:dict=None):
     return item
 
 @pass_context
-def filter_lookup_manifest(context, pattern: str, spec:dict=None):
+def global_lookup_manifest(context, **kwargs):
 
-    if spec is None:
-        spec = {}
-    spec["pattern"] = pattern
-
-    lookup = yaml_types.Lookup(spec)
+    lookup = yaml_types.Lookup(kwargs)
 
     scope = context.environment.kmt_manifest
     if scope is None:
@@ -72,14 +64,9 @@ def filter_lookup_manifest(context, pattern: str, spec:dict=None):
     return item
 
 @pass_context
-def filter_hash_manifest(context, pattern: str, spec:dict=None, hash_type:str="sha1"):
+def global_hash_manifest(context, **kwargs):
 
-    if spec is None:
-        spec = {}
-    spec["pattern"] = pattern
-    spec["hash_type"] = hash_type
-
-    lookup = yaml_types.LookupHash(spec)
+    lookup = yaml_types.LookupHash(kwargs)
 
     scope = context.environment.kmt_manifest
     if scope is None:
@@ -89,14 +76,30 @@ def filter_hash_manifest(context, pattern: str, spec:dict=None, hash_type:str="s
 
     return item
 
-def filter_env(name, default=None):
-    return os.environ.get(name, default)
+@pass_context
+def global_hash_self(context, hash_type='sha1'):
+
+    manifest = context.environment.kmt_manifest
+    if manifest is None:
+        raise exception.KMTTemplateException("Attempt to generate self hash with no current manifest")
+
+    return util.hash_manifest(manifest.spec, hash_type=hash_type)
+
+def global_env(name=None):
+    env = os.environ.copy()
+
+    if name is not None:
+        return env.get(name)
+
+    return env
 
 core.default_filters["hash_string"] = filter_hash_string
 core.default_filters["b64encode"] = filter_base64_encode
 core.default_filters["b64decode"] = filter_base64_decode
-core.default_filters["include_file_str"] = filter_include_file_str
-core.default_filters["lookup_manifest"] = filter_lookup_manifest
-core.default_filters["lookup_manifest_name"] = filter_lookup_manifest_name
-core.default_filters["hash_manifest"] = filter_hash_manifest
-core.default_filters["env"] = filter_env
+
+core.default_globals["env"] = global_env
+core.default_globals["include_file_str"] = global_include_file_str
+core.default_globals["lookup_manifest"] = global_lookup_manifest
+core.default_globals["lookup_manifest_name"] = global_lookup_manifest_name
+core.default_globals["hash_manifest"] = global_hash_manifest
+core.default_globals["hash_self"] = global_hash_self

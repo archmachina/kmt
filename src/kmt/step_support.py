@@ -8,21 +8,6 @@ import kmt.core as core
 
 logger = logging.getLogger(__name__)
 
-class StepSupportRefreshHash(core.StepSupportHandler):
-    """
-    """
-    def extract(self, step_def):
-        pass
-
-    def pre(self):
-        pass
-
-    def post(self):
-        for manifest in self.state.working_manifests:
-            manifest.refresh_hash()
-
-        logger.debug(f"RefreshHash: document short sum: {manifest.local_vars['shortsum']}")
-
 class StepSupportWhen(core.StepSupportHandler):
     def extract(self, step_def):
         # When condition

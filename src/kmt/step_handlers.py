@@ -212,18 +212,6 @@ class StepHandlerStdin(core.StepHandler):
             self.state.pipeline.manifests.append(manifest)
             self.state.working_manifests.append(manifest)
 
-class StepHandlerRefreshHash(core.StepHandler):
-    """
-    """
-    def extract(self, step_def):
-        pass
-
-    def run(self):
-        for manifest in self.state.working_manifests:
-            manifest.refresh_hash()
-
-            logger.debug(f"RefreshHash: manifest short sum: {manifest.local_vars['kmt_shortsum']}")
-
 class StepHandlerJsonPatch(core.StepHandler):
     def extract(self, step_def):
         self.patches = util.extract_property(step_def, "patches")
@@ -301,9 +289,7 @@ class StepHandlerMetadata(core.StepHandler):
 core.default_handlers["pipeline"] = StepHandlerPipeline
 core.default_handlers["import"] = StepHandlerImport
 core.default_handlers["vars"] = StepHandlerVars
-# types.default_handlers["replace"] = StepHandlerReplace
 core.default_handlers["stdin"] = StepHandlerStdin
-core.default_handlers["refresh_hash"] = StepHandlerRefreshHash
 core.default_handlers["jsonpatch"] = StepHandlerJsonPatch
 core.default_handlers["metadata"] = StepHandlerMetadata
 core.default_handlers["delete"] = StepHandlerDelete

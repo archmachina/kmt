@@ -50,7 +50,7 @@ def hash_string(source, hash_type="sha1", encoding="utf-8"):
 def hash_object(source, hash_type="sha1"):
     validate(source is not None, "Invalid source supplied to hash_object")
 
-    text = yaml.dump(source)
+    text = yaml_dump(source)
 
     return hash_string(text, hash_type=hash_type)
 
@@ -63,7 +63,7 @@ def hash_manifest(source, hash_type="sha1"):
     if "metadata" in new_obj:
         new_obj.pop("metadata")
 
-    text = yaml.dump(new_obj)
+    text = yaml_dump(new_obj)
 
     return hash_string(text, hash_type=hash_type)
 

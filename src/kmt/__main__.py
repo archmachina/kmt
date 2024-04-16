@@ -9,7 +9,7 @@ import kmt.core as core
 import kmt.step_handlers as step_handlers
 import kmt.step_support as step_support
 import kmt.pipeline_support as pipeline_support
-import kmt.filters as filters
+import kmt.j2support as j2support
 
 logger = logging.getLogger(__name__)
 

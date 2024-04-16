@@ -17,6 +17,7 @@ default_handlers = {}
 default_step_support_handlers = []
 default_pipeline_support_handlers = []
 default_filters = {}
+default_globals = {}
 
 class Manifest:
     def __init__(self, source, *, pipeline):
@@ -51,7 +52,7 @@ class Manifest:
         effective_vars.update(self.local_vars)
         effective_vars.update(builtin)
 
-        overlay = self.pipeline.environment.overlay()
+        overlay = self.pipeline.common.environment.overlay()
         overlay.kmt_pipeline = self.pipeline
         overlay.kmt_manifest = self
 
@@ -68,19 +69,6 @@ class Manifest:
         self.local_vars["kmt_metadata_namespace"] = info["namespace"]
         self.local_vars["kmt_metadata_name"] = info["name"]
 
-    def refresh_hash(self):
-
-        new_spec = self.spec.copy()
-        if "metadata" in new_spec:
-            new_spec.pop("metadata")
-
-        text = yaml.dump(new_spec)
-
-        self.local_vars["kmt_md5sum"] = util.hash_string(text, hash_type="md5", encoding="utf-8")
-        self.local_vars["kmt_sha1sum"] = util.hash_string(text, hash_type="sha1", encoding="utf-8")
-        self.local_vars["kmt_sha256sum"] = util.hash_string(text, hash_type="sha256", encoding="utf-8")
-        self.local_vars["kmt_shortsum"] = util.hash_string(text, hash_type="short8", encoding="utf-8")
-
 class Common:
     def __init__(self):
         self.environment = jinja2.Environment()
@@ -94,6 +82,9 @@ class Common:
 
         for filter_name in default_filters:
             self.environment.filters[filter_name] = default_filters[filter_name]
+
+        for global_name in default_globals:
+            self.environment.globals[global_name] = default_globals[global_name]
 
     def add_handlers(self, handlers):
         util.validate(isinstance(handlers, dict), "Invalid handlers passed to add_handlers")
@@ -216,7 +207,7 @@ class Pipeline:
 
         # Parse content of the config file and process parameters
         with open(configfile, "r", encoding="utf-8") as file:
-            pipeline_spec = yaml.safe_load(file)
+            pipeline_spec = util.yaml_load(file)
 
         self.configdir = configdir
         self.configfile = configfile
@@ -424,7 +415,7 @@ class Templater:
 
         return output
 
-    def resolve(self, value, types, /, template=True, recursive=False):
+    def resolve(self, value, types=None, *, template=True, recursive=False):
         util.validate(isinstance(template, bool), "Invalid value for template passed to resolve")
 
         # Template the value, if it is a string
@@ -435,6 +426,7 @@ class Templater:
             else:
                 value = self.template_if_string(value)
 
-        value = util.coerce_value(types, value)
+        if types is not None:
+            value = util.coerce_value(types, value)
 
         return value
