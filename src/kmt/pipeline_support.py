@@ -47,8 +47,32 @@ class PipelineSupportRoot(core.PipelineSupportHandler):
             return
 
         annotations_list = [
-            "kmt/original-name"
+            "kmt/original-name",
+            "kmt/rename-hash"
         ]
+
+        # Rename any objects that require a hash suffix
+        for manifest in self.pipeline.manifests:
+            metadata = manifest.spec.get("metadata")
+            if not isinstance(metadata, dict):
+                continue
+
+            annotations = metadata.get("annotations")
+            if not isinstance(annotations, dict):
+                continue
+
+            if "kmt/rename-hash" not in annotations:
+                continue
+
+            original_name = annotations.get("kmt/original-name")
+            if original_name is None:
+                continue
+
+            hash = util.hash_manifest(manifest.spec, hash_type="short10")
+
+            new_name = f"{original_name}-{hash}"
+
+            metadata["name"] = new_name
 
         # Call _resolve_reference for all nodes in the manifest to see if replacement
         # is required
