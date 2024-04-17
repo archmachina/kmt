@@ -93,6 +93,9 @@ def global_env(name=None):
 
     return env
 
+def global_fail(message:str):
+    raise exception.KMTTemplateException(message)
+
 core.default_filters["hash_string"] = filter_hash_string
 core.default_filters["b64encode"] = filter_base64_encode
 core.default_filters["b64decode"] = filter_base64_decode
@@ -103,3 +106,4 @@ core.default_globals["lookup_manifest"] = global_lookup_manifest
 core.default_globals["lookup_manifest_name"] = global_lookup_manifest_name
 core.default_globals["hash_manifest"] = global_hash_manifest
 core.default_globals["hash_self"] = global_hash_self
+core.default_globals["fail"] = global_fail

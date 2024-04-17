@@ -185,10 +185,10 @@ def lookup_representer(dumper: yaml.SafeDumper, lookup: Lookup):
     return dumper.represent_mapping("!lookup", lookup.spec)
 
 def lookup_name_representer(dumper: yaml.SafeDumper, lookup_name: LookupName):
-    return dumper.represent_mapping("!lookup_name", lookup_name.spec)
+    return dumper.represent_mapping("!name", lookup_name.spec)
 
 def lookup_hash_representer(dumper: yaml.SafeDumper, lookup_hash: LookupHash):
-    return dumper.represent_mapping("!lookup_hash", lookup_hash.spec)
+    return dumper.represent_mapping("!hash", lookup_hash.spec)
 
 def lookup_configmap_representer(dumper: yaml.SafeDumper, lookup_configmap: LookupConfigMap):
     return dumper.represent_str("!configmap", lookup_configmap.name)
@@ -241,8 +241,8 @@ for type_ref, representer in representers:
 # yaml constructors
 constructors = [
     ("!lookup", lookup_constructor),
-    ("!lookup_name", lookup_name_constructor),
-    ("!lookup_hash", lookup_hash_constructor),
+    ("!name", lookup_name_constructor),
+    ("!hash", lookup_hash_constructor),
     ("!configmap", lookup_configmap_constructor),
     ("!secret", lookup_secret_constructor)
 ]
