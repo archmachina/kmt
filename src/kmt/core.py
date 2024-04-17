@@ -183,7 +183,7 @@ class StepHandler:
         raise exception.PipelineRunException("run undefined in StepHandler")
 
 class Pipeline:
-    def __init__(self, configdir, common=None, pipeline_vars=None, manifests=None):
+    def __init__(self, configdir, common=None, pipeline_vars=None, manifests=None, root_pipeline=True):
 
         if pipeline_vars is None:
             pipeline_vars = {}
@@ -295,6 +295,9 @@ class Pipeline:
         # pipeline.vars can be used to access variables that have already been resolved
         self.vars = util.resolve_var_refs(unresolved_vars, self.common.environment, ignore_list=builtin.keys())
 
+        # root_pipeline defines whether to act as the final/top level pipeline
+        self.root_pipeline = root_pipeline
+
     def get_templater(self):
         overlay = self.common.environment.overlay()
         overlay.kmt_pipeline = self
@@ -303,24 +306,6 @@ class Pipeline:
         return Templater(overlay, self.vars)
 
     def run(self):
-
-        # Run the pipeline and capture any manifests, without resolving lookups
-        manifests = self.run_no_resolve()
-
-        # Call _resolve_reference for all nodes in the manifest to see if replacement
-        # is required
-        for manifest in manifests:
-            util.walk_object(manifest.spec, lambda x: self._resolve_reference(manifest, x), update=True)
-
-        return manifests
-
-    def _resolve_reference(self, current_manifest, item):
-        if isinstance(item, yaml_types.YamlTag):
-            return item.resolve(current_manifest)
-
-        return item
-
-    def run_no_resolve(self):
 
         # Create and initialise pipeline support handlers
         ps_handlers = [x() for x in self.common.pipeline_support_handlers]

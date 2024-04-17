@@ -57,9 +57,10 @@ class StepHandlerPipeline(core.StepHandler):
 
         # Create the new pipeline and run
         pipeline = core.Pipeline(path, common=self.state.pipeline.common,
-                        pipeline_vars=pipeline_vars, manifests=pipeline_manifests)
+                        pipeline_vars=pipeline_vars, manifests=pipeline_manifests,
+                        root_pipeline=False)
 
-        pipeline_manifests = [x.spec for x in pipeline.run_no_resolve()]
+        pipeline_manifests = [x.spec for x in pipeline.run()]
 
         # The manifests returned from the pipeline will be added to the working manifests
         # If pass_manifests is true, then working_manifests would be empty, but if not, then

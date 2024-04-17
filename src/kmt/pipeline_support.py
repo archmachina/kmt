@@ -2,6 +2,7 @@ import logging
 
 import kmt.util as util
 import kmt.core as core
+import kmt.yaml_types as yaml_types
 
 logger = logging.getLogger(__name__)
 
@@ -31,4 +32,44 @@ class PipelineSupportOrdering(core.PipelineSupportHandler):
         # to allow for easy diff comparison
         self.pipeline.manifests = sorted(self.pipeline.manifests, key=lambda x: _get_metadata_str(x))
 
+class PipelineSupportRoot(core.PipelineSupportHandler):
+    def pre(self):
+        pass
+
+    def post(self):
+
+        # Only run when we're operating on a root/top level pipeline
+        if not self.pipeline.root_pipeline:
+            return
+
+        annotations_list = [
+            "kmt/original-name"
+        ]
+
+        # Call _resolve_reference for all nodes in the manifest to see if replacement
+        # is required
+        for manifest in self.pipeline.manifests:
+            util.walk_object(manifest.spec, lambda x: self._resolve_reference(manifest, x), update=True)
+
+        # Remove kmt specific annotations
+        for manifest in self.pipeline.manifests:
+            metadata = manifest.spec.get("metadata")
+            if not isinstance(metadata, dict):
+                continue
+
+            annotations = metadata.get("annotations")
+            if not isinstance(annotations, dict):
+                continue
+
+            for key in annotations_list:
+                if key in annotations:
+                    annotations.pop(key)
+
+    def _resolve_reference(self, current_manifest, item):
+        if isinstance(item, yaml_types.YamlTag):
+            return item.resolve(current_manifest)
+
+        return item
+
 core.default_pipeline_support_handlers.append(PipelineSupportOrdering)
+core.default_pipeline_support_handlers.append(PipelineSupportRoot)

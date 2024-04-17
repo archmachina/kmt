@@ -128,7 +128,7 @@ class LookupConfigMap(YamlTag):
             if original_name == self.name:
                 matches.append(manifest)
 
-        if len(matches) < 0:
+        if len(matches) < 1:
             raise exception.KMTTemplateException(f"Could not find matching configmap: {self.name}")
 
         if len(matches) > 1:
@@ -171,7 +171,7 @@ class LookupSecret(YamlTag):
             if original_name == self.name:
                 matches.append(manifest)
 
-        if len(matches) < 0:
+        if len(matches) < 1:
             raise exception.KMTTemplateException(f"Could not find matching secret: {self.name}")
 
         if len(matches) > 1:
