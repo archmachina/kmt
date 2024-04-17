@@ -12,6 +12,10 @@ class PipelineSupportOrdering(core.PipelineSupportHandler):
 
     def post(self):
 
+        # Don't bother sorting unless we're on a top level pipeline
+        if not self.pipeline.root_pipeline:
+            return
+
         def _get_metadata_str(manifest):
             keys = [
                 "group",
