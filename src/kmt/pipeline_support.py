@@ -64,15 +64,12 @@ class PipelineSupportRoot(core.PipelineSupportHandler):
             if "kmt/rename-hash" not in annotations:
                 continue
 
-            original_name = annotations.get("kmt/original-name")
-            if original_name is None:
-                continue
-
             hash = util.hash_manifest(manifest.spec, hash_type="short10")
 
-            new_name = f"{original_name}-{hash}"
-
-            metadata["name"] = new_name
+            # Rename based on the current manifest name.
+            # Don't use original name as this is only used to find the manifest. The name may have
+            # been altered and we should preserve that and just append the hash.
+            metadata["name"] = f"{metadata['name']}-{hash}"
 
         # Call _resolve_reference for all nodes in the manifest to see if replacement
         # is required
