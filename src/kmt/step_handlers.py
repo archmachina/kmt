@@ -9,6 +9,7 @@ import sys
 import kmt.core as core
 import kmt.util as util
 import kmt.yaml_types as yaml_types
+import kmt.exception as exception
 
 from .exception import PipelineRunException
 
@@ -21,6 +22,8 @@ class StepHandlerPipeline(core.StepHandler):
         # Path to other pipeline
         self.path = util.extract_property(step_def, "path")
 
+        self.pass_vars = util.extract_property(step_def, "pass_vars", default=False)
+        self.pass_vars_filter = util.extract_property(step_def, "pass_vars_filter", default=[])
         self.vars = util.extract_property(step_def, "vars", default={})
 
         self.pass_manifests = util.extract_property(step_def, "pass_manifests", default=False)
@@ -35,10 +38,24 @@ class StepHandlerPipeline(core.StepHandler):
         # Path to the other pipeline
         path = templater.resolve(self.path, str)
 
-        # Vars to pass to the new pipeline
-        # Do a recursive template/resolve all references before passing it to
-        # the new pipeline
-        pipeline_vars = templater.resolve(self.vars, dict, recursive=True)
+        #
+        # Determine all of the vars to pass to the new pipeline
+        pipeline_vars = {}
+
+        # Are we passing existing vars to the new pipline
+        if self.pass_vars:
+            if len(self.pass_vars_filter) == 0:
+                pipeline_vars.update(self.state.pipeline.vars)
+            else:
+                for var_name in self.pass_vars_filter:
+                    if var_name not in self.state.pipeline.vars:
+                        continue
+
+                    pipeline_vars[var_name] = self.state.pipeline.vars[var_name]
+
+        # Resolve any vars specified in the 'vars' parameter and update pass_vars
+        new_vars = templater.resolve(self.vars, dict, recursive=True)
+        pipeline_vars.update(new_vars)
 
         pipeline_manifests = []
         if pass_manifests:
