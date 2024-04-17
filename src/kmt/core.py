@@ -42,8 +42,8 @@ class Manifest:
             metadata["annotations"] = annotations
 
         name = metadata.get("name")
-        if name is not None and "kmt/original-name" not in annotations:
-            annotations["kmt/original-name"] = name
+        if name is not None and "kmt/alias" not in annotations:
+            annotations["kmt/alias"] = name
 
 
     def __str__(self):

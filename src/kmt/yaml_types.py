@@ -121,11 +121,11 @@ class LookupConfigMap(YamlTag):
             if annotations is None:
                 continue
 
-            original_name = annotations.get("kmt/original-name")
-            if original_name is None:
+            alias = annotations.get("kmt/alias")
+            if alias is None:
                 continue
 
-            if original_name == self.name:
+            if alias == self.name:
                 matches.append(manifest)
 
         if len(matches) < 1:
@@ -164,11 +164,11 @@ class LookupSecret(YamlTag):
             if annotations is None:
                 continue
 
-            original_name = annotations.get("kmt/original-name")
-            if original_name is None:
+            alias = annotations.get("kmt/alias")
+            if alias is None:
                 continue
 
-            if original_name == self.name:
+            if alias == self.name:
                 matches.append(manifest)
 
         if len(matches) < 1:

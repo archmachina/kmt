@@ -47,7 +47,7 @@ class PipelineSupportRoot(core.PipelineSupportHandler):
             return
 
         annotations_list = [
-            "kmt/original-name",
+            "kmt/alias",
             "kmt/rename-hash"
         ]
 
@@ -67,7 +67,7 @@ class PipelineSupportRoot(core.PipelineSupportHandler):
             hash = util.hash_manifest(manifest.spec, hash_type="short10")
 
             # Rename based on the current manifest name.
-            # Don't use original name as this is only used to find the manifest. The name may have
+            # Don't use alias as this is only used to find the manifest. The name may have
             # been altered and we should preserve that and just append the hash.
             metadata["name"] = f"{metadata['name']}-{hash}"
 

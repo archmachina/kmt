@@ -104,13 +104,20 @@ def extract_manifest_info(manifest, default_value=None):
         name = metadata.get("name", default_value)
         namespace = metadata.get("namespace", default_value)
 
+    # Manifest alias
+    alias = default_value
+    annotations = metadata.get("annotations")
+    if annotations is not None:
+        alias = annotations.get("kmt/alias", default_value)
+
     return {
         "group": group,
         "version": version,
         "kind": kind,
         "api_version": api_version,
         "namespace": namespace,
-        "name": name
+        "name": name,
+        "alias": alias
     }
 
 def walk_object(object, callback, update=False):
@@ -369,7 +376,8 @@ def check_find_manifests_keys(search:dict):
         "kind",
         "api_version",
         "namespace",
-        "pattern"
+        "pattern",
+        "alias"
     ]
 
     errored = []
@@ -416,6 +424,9 @@ def find_manifests(search, manifests, *, multiple, current_namespace=None):
             continue
 
         if "pattern" in search and search["pattern"] is not None and not re.search(search["pattern"], info["name"]):
+            continue
+
+        if "alias" in search and search["alias"] != info["alias"]:
             continue
 
         matches.append(manifest)
