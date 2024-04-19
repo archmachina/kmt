@@ -67,7 +67,7 @@ def hash_manifest(source, hash_type="sha1"):
 
     return hash_string(text, hash_type=hash_type)
 
-def extract_manifest_info(manifest, default_value=None):
+def extract_manifest_info(manifest:core.Manifest, default_value=None):
     validate(isinstance(manifest, (dict, core.Manifest)), "Invalid manifest supplied to extract_manifest_info")
 
     if isinstance(manifest, core.Manifest):
@@ -96,19 +96,27 @@ def extract_manifest_info(manifest, default_value=None):
     # Kind
     kind = manifest.get("kind", default_value)
 
-    # Name and Namespace
-    namespace = default_value
-    name = default_value
+    # metadata
     metadata = manifest.get("metadata")
-    if isinstance(metadata, dict):
-        name = metadata.get("name", default_value)
-        namespace = metadata.get("namespace", default_value)
+    if not isinstance(metadata, dict):
+        raise exception.KMTManifestException("Invalid metadata type on manifest")
+
+    # Name and Namespace
+    name = metadata.get("name", default_value)
+    namespace = metadata.get("namespace", default_value)
+
+    # Annotations
+    annotations = metadata.get("annotations", {})
+    if not isinstance(annotations, dict):
+        raise exception.KMTManifestException("Invalid annotations type on manifest")
+
+    # Labels
+    labels = metadata.get("labels", {})
+    if not isinstance(labels, dict):
+        raise exception.KMTManifestException("Invalid labels type on manifest")
 
     # Manifest alias
-    alias = default_value
-    annotations = metadata.get("annotations")
-    if annotations is not None:
-        alias = annotations.get("kmt/alias", default_value)
+    alias = annotations.get("kmt/alias", default_value)
 
     return {
         "group": group,
@@ -117,7 +125,11 @@ def extract_manifest_info(manifest, default_value=None):
         "api_version": api_version,
         "namespace": namespace,
         "name": name,
-        "alias": alias
+        "alias": alias,
+        "manifest": manifest,
+        "metadata": metadata,
+        "annotations": annotations,
+        "labels": labels
     }
 
 def walk_object(object, callback, update=False):
