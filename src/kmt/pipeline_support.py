@@ -36,7 +36,7 @@ class PipelineSupportOrdering(core.PipelineSupportHandler):
         # to allow for easy diff comparison
         self.pipeline.manifests = sorted(self.pipeline.manifests, key=lambda x: _get_metadata_str(x))
 
-class PipelineSupportRoot(core.PipelineSupportHandler):
+class PipelineSupportResolve(core.PipelineSupportHandler):
     def pre(self):
         pass
 
@@ -45,11 +45,6 @@ class PipelineSupportRoot(core.PipelineSupportHandler):
         # Only run when we're operating on a root/top level pipeline
         if not self.pipeline.root_pipeline:
             return
-
-        annotations_list = [
-            "kmt/alias",
-            "kmt/rename-hash"
-        ]
 
         # Rename any objects that require a hash suffix
         for manifest in self.pipeline.manifests:
@@ -64,6 +59,8 @@ class PipelineSupportRoot(core.PipelineSupportHandler):
             if "kmt/rename-hash" not in annotations:
                 continue
 
+            annotations.pop("kmt/rename-hash")
+
             hash = util.hash_manifest(manifest.spec, hash_type="short10")
 
             # Rename based on the current manifest name.
@@ -75,6 +72,27 @@ class PipelineSupportRoot(core.PipelineSupportHandler):
         # is required
         for manifest in self.pipeline.manifests:
             util.walk_object(manifest.spec, lambda x: self._resolve_reference(manifest, x), update=True)
+
+    def _resolve_reference(self, current_manifest, item):
+        if isinstance(item, yaml_types.YamlTag):
+            return item.resolve(current_manifest)
+
+        return item
+
+class PipelineSupportCleanup(core.PipelineSupportHandler):
+    def pre(self):
+        pass
+
+    def post(self):
+
+        # Only run when we're operating on a root/top level pipeline
+        if not self.pipeline.root_pipeline:
+            return
+
+        annotations_list = [
+            "kmt/alias",
+            "kmt/rename-hash"
+        ]
 
         # Remove kmt specific annotations
         for manifest in self.pipeline.manifests:
@@ -90,11 +108,6 @@ class PipelineSupportRoot(core.PipelineSupportHandler):
                 if key in annotations:
                     annotations.pop(key)
 
-    def _resolve_reference(self, current_manifest, item):
-        if isinstance(item, yaml_types.YamlTag):
-            return item.resolve(current_manifest)
-
-        return item
-
 core.default_pipeline_support_handlers.append(PipelineSupportOrdering)
-core.default_pipeline_support_handlers.append(PipelineSupportRoot)
+core.default_pipeline_support_handlers.append(PipelineSupportResolve)
+core.default_pipeline_support_handlers.append(PipelineSupportCleanup)
