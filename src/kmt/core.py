@@ -30,21 +30,32 @@ class Manifest:
         self.tags = set()
         self.local_vars = {}
 
-        # Make sure each spec has some minimum configuration
-        metadata = self.spec.get("metadata")
-        if metadata is None:
-            metadata = {}
-            self.spec["metadata"] = metadata
+        # Require a minimum of a metadata dictionary and name to create this
+        # manifest.
+        if "metadata" not in self.spec:
+            raise exception.KMTManifestException("Missing metadata on manifest")
 
+        metadata = self.spec.get("metadata")
+        if not isinstance(metadata, dict):
+            raise exception.KMTManifestException(f"Invalid metadata type on manifest: {type(metadata)}")
+
+        if "name" not in metadata:
+            raise exception.KMTManifestException("Missing name on manifest")
+
+        name = metadata.get("name")
+        if not isinstance(name, str) or name == "":
+            raise exception.KMTManifestException("Missing or invalid name on manifest")
+
+        # Add annotations, if not present
         annotations = metadata.get("annotations")
         if annotations is None:
             annotations = {}
             metadata["annotations"] = annotations
 
+        # alias
         name = metadata.get("name")
-        if name is not None and "kmt/alias" not in annotations:
+        if "kmt/alias" not in annotations:
             annotations["kmt/alias"] = name
-
 
     def __str__(self):
         output = util.yaml_dump(self.spec)
@@ -84,6 +95,25 @@ class Manifest:
         self.local_vars["kmt_metadata_api_version"] = info["api_version"]
         self.local_vars["kmt_metadata_namespace"] = info["namespace"]
         self.local_vars["kmt_metadata_name"] = info["name"]
+
+class ManifestInfo:
+    def __init__(self, manifest:Manifest):
+        util.validate(isinstance(manifest, Manifest), "Invalid manifest passed to ManifestInfo")
+
+        info = util.extract_manifest_info(manifest)
+
+        self.group = info["group"]
+        self.version = info["version"]
+        self.kind = info["kind"]
+        self.api_version = info["api_version"]
+        self.namespace = info["namespace"]
+        self.name = info["name"]
+        self.alias = info["alias"]
+        self.manifest = info["manifest"]
+        self.metadata = info["metadata"]
+        self.annotations = info["annotations"]
+        self.labels = info["labels"]
+
 
 class Common:
     def __init__(self):
