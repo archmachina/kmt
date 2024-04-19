@@ -38,16 +38,19 @@ class StepHandlerPipeline(core.StepHandler):
         # Path to the other pipeline
         path = templater.resolve(self.path, str)
 
+        # Resolve pass_vars_filter
+        pass_vars_filter = templater.resolve(self.pass_vars_filter, list)
+
         #
         # Determine all of the vars to pass to the new pipeline
         pipeline_vars = {}
 
         # Are we passing existing vars to the new pipline
         if self.pass_vars:
-            if len(self.pass_vars_filter) == 0:
+            if len(pass_vars_filter) == 0:
                 pipeline_vars.update(self.state.pipeline.vars)
             else:
-                for var_name in self.pass_vars_filter:
+                for var_name in pass_vars_filter:
                     if var_name not in self.state.pipeline.vars:
                         continue
 
