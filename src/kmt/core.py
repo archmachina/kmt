@@ -48,7 +48,10 @@ class Manifest:
 
         # Add annotations, if not present
         annotations = metadata.get("annotations")
-        if annotations is None:
+        if annotations is not None:
+            if not isinstance(annotations, dict):
+                raise exception.KMTManifestException("Invalid type for annotations on manifest")
+        else:
             annotations = {}
             metadata["annotations"] = annotations
 
@@ -95,26 +98,6 @@ class Manifest:
         self.local_vars["kmt_metadata_api_version"] = info["api_version"]
         self.local_vars["kmt_metadata_namespace"] = info["namespace"]
         self.local_vars["kmt_metadata_name"] = info["name"]
-
-class ManifestInfo:
-    def __init__(self, source):
-        if isinstance(source, Manifest):
-            source = source.spec
-
-        util.validate(isinstance(source, dict), "Invalid manifest passed to ManifestInfo")
-
-        self.group = source["group"]
-        self.version = source["version"]
-        self.kind = source["kind"]
-        self.api_version = source["api_version"]
-        self.namespace = source["namespace"]
-        self.name = source["name"]
-        self.alias = source["alias"]
-        self.manifest = source["manifest"]
-        self.metadata = source["metadata"]
-        self.annotations = source["annotations"]
-        self.labels = source["labels"]
-
 
 class Common:
     def __init__(self):
