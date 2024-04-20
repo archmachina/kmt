@@ -1,8 +1,11 @@
 import logging
+import jsonpath_ng
+import itertools
 
 import kmt.util as util
 import kmt.core as core
 import kmt.yaml_types as yaml_types
+import kmt.exception as exception
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +39,7 @@ class PipelineSupportOrdering(core.PipelineSupportHandler):
         # to allow for easy diff comparison
         self.pipeline.manifests = sorted(self.pipeline.manifests, key=lambda x: _get_metadata_str(x))
 
-class PipelineSupportResolve(core.PipelineSupportHandler):
+class PipelineSupportRenameHash(core.PipelineSupportHandler):
     def pre(self):
         pass
 
@@ -46,27 +49,154 @@ class PipelineSupportResolve(core.PipelineSupportHandler):
         if not self.pipeline.root_pipeline:
             return
 
+        # Perform rename for any manifests that require hash rename
+        self._rename_hash()
+
+        # Update any manifest references to manifests that have been hash renamed
+        self._update_hash_refs()
+
+    def _rename_hash(self):
+
         # Rename any objects that require a hash suffix
         for manifest in self.pipeline.manifests:
-            metadata = manifest.spec.get("metadata")
-            if not isinstance(metadata, dict):
-                continue
-
-            annotations = metadata.get("annotations")
-            if not isinstance(annotations, dict):
-                continue
+            info = util.extract_manifest_info(manifest)
+            annotations = info["annotations"]
 
             if "kmt/rename-hash" not in annotations:
                 continue
 
             annotations.pop("kmt/rename-hash")
+            annotations["kmt/pre-hash-name"] = info["name"]
 
             hash = util.hash_manifest(manifest.spec, hash_type="short10")
 
             # Rename based on the current manifest name.
             # Don't use alias as this is only used to find the manifest. The name may have
             # been altered and we should preserve that and just append the hash.
-            metadata["name"] = f"{metadata['name']}-{hash}"
+            manifest.spec["metadata"]["name"] = f"{info['name']}-{hash}"
+
+    def _update_hash_refs(self):
+
+        # Create two mappings. One for namespace -> kind -> pre-hash-name and another
+        # for namespace -> kind
+
+        rename_map = {}
+        kind_map = {}
+
+        for manifest in self.pipeline.manifests:
+            info = util.extract_manifest_info(manifest)
+
+            annotations = info["annotations"]
+            namespace = info["namespace"]
+            kind = info["kind"]
+
+            # Add the manifest to the kind map
+            if namespace not in kind_map:
+                kind_map[namespace] = {}
+
+            if kind not in kind_map[namespace]:
+                kind_map[namespace][kind] = []
+
+            kind_map[namespace][kind].append(manifest)
+
+            # If there is no pre-hash-name, don't need to add to the rename map
+            if "kmt/pre-hash-name" not in annotations:
+                continue
+
+            pre_hash_name = annotations["kmt/pre-hash-name"]
+            if not isinstance(pre_hash_name, str) or pre_hash_name == "":
+                raise exception.KMTInternalException("Invalid pre-hash-name on manifest")
+
+            # Add the manifest to the rename map
+            if namespace not in rename_map:
+                rename_map[namespace] = {}
+
+            if kind not in rename_map[namespace]:
+                rename_map[namespace][kind] = {}
+
+            if pre_hash_name in rename_map[namespace][kind]:
+                raise exception.KMTManifestException("Multiple manifests with the same pre hash name {pre_hash_name} in namespace {Namespace} with kind {kind}")
+
+            rename_map[namespace][kind][pre_hash_name] = info["name"]
+
+        # We now have two mappings, allowing access to resources by namespace and kind and access to
+        # a list of pre hash names by namespace and kind
+
+        pattern_mapping = {
+            "Deployment": {
+                "Secret": [
+                    "spec.template.spec.initContainers[*].env[*].valueFrom.secretKeyRef.name"
+                ]
+            }
+        }
+
+        for manifest in self.pipeline.manifests:
+            info = util.extract_manifest_info(manifest)
+
+            source_namespace = info["namespace"]
+            source_kind = info["kind"]
+
+            # Check if there is a pattern mapping for this source kind
+            if source_kind not in pattern_mapping:
+                continue
+
+            for target_kind in pattern_mapping[source_kind]:
+                # target kind will be Secret and/or ConfigMap
+                for pattern_str in pattern_mapping[source_kind][target_kind]:
+                    pattern = jsonpath_ng.parse(pattern_str)
+
+                    for pattern_match in pattern.find(manifest.spec):
+                        match_value = pattern_match.value
+
+                        if not isinstance(match_value, str) or match_value == "":
+                            continue
+
+                        if match_value in rename_map[source_namespace][target_kind]:
+                            pattern_match.full_path.update(
+                                manifest.spec,
+                                rename_map[source_namespace][target_kind][match_value]
+                            )
+
+
+    def _lookup_rename(self, value:str, info:dict, mapping:dict):
+        # Find the value in the mapping
+
+        if not isinstance(value, str):
+            return value
+
+        if value not in mapping["pre-hash-name"]:
+            return value
+
+        pre_hash_names = mapping["pre-hash-name"][info["pre-hash-name"]]
+        namespaces = mapping["namespace"][info["namespace"]]
+        kind = mapping["kind"][info["kind"]]
+
+        working = pre_hash_names.intersection(namespaces)
+        working = working.intersection(kind)
+
+        if len(working) > 1:
+            raise exception.KMTManifestException(f"Multiple matches for hash rename value: {value}")
+
+        if len(working) < 1:
+            return value
+
+        manifest_match = working.pop()
+        info = util.extract_manifest_info(manifest_match)
+
+        logger.debug(f"Renaming value from {value} to {info['name']}")
+
+        return info["name"]
+
+
+class PipelineSupportResolveTags(core.PipelineSupportHandler):
+    def pre(self):
+        pass
+
+    def post(self):
+
+        # Only run when we're operating on a root/top level pipeline
+        if not self.pipeline.root_pipeline:
+            return
 
         # Call _resolve_reference for all nodes in the manifest to see if replacement
         # is required
@@ -109,5 +239,6 @@ class PipelineSupportCleanup(core.PipelineSupportHandler):
                     annotations.pop(key)
 
 core.default_pipeline_support_handlers.append(PipelineSupportOrdering)
-core.default_pipeline_support_handlers.append(PipelineSupportResolve)
+core.default_pipeline_support_handlers.append(PipelineSupportRenameHash)
+core.default_pipeline_support_handlers.append(PipelineSupportResolveTags)
 core.default_pipeline_support_handlers.append(PipelineSupportCleanup)

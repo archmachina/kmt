@@ -97,22 +97,23 @@ class Manifest:
         self.local_vars["kmt_metadata_name"] = info["name"]
 
 class ManifestInfo:
-    def __init__(self, manifest:Manifest):
-        util.validate(isinstance(manifest, Manifest), "Invalid manifest passed to ManifestInfo")
+    def __init__(self, source):
+        if isinstance(source, Manifest):
+            source = source.spec
 
-        info = util.extract_manifest_info(manifest)
+        util.validate(isinstance(source, dict), "Invalid manifest passed to ManifestInfo")
 
-        self.group = info["group"]
-        self.version = info["version"]
-        self.kind = info["kind"]
-        self.api_version = info["api_version"]
-        self.namespace = info["namespace"]
-        self.name = info["name"]
-        self.alias = info["alias"]
-        self.manifest = info["manifest"]
-        self.metadata = info["metadata"]
-        self.annotations = info["annotations"]
-        self.labels = info["labels"]
+        self.group = source["group"]
+        self.version = source["version"]
+        self.kind = source["kind"]
+        self.api_version = source["api_version"]
+        self.namespace = source["namespace"]
+        self.name = source["name"]
+        self.alias = source["alias"]
+        self.manifest = source["manifest"]
+        self.metadata = source["metadata"]
+        self.annotations = source["annotations"]
+        self.labels = source["labels"]
 
 
 class Common:
