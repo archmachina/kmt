@@ -163,7 +163,19 @@ class StepSupportMetadata(core.StepSupportHandler):
     def post(self):
         pass
 
+class StepSupportValidate(core.StepSupportHandler):
+    def extract(self, step_def):
+        pass
+
+    def pre(self):
+        pass
+
+    def post(self):
+        for manifest in self.state.working_manifests:
+            manifest.validate()
+
 core.default_step_support_handlers.append(StepSupportMetadata)
 core.default_step_support_handlers.append(StepSupportTags)
 core.default_step_support_handlers.append(StepSupportWhen)
 # core.default_step_support_handlers.append(StepSupportRefreshHash)
+core.default_step_support_handlers.append(StepSupportValidate)

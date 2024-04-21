@@ -99,6 +99,44 @@ class Manifest:
         self.local_vars["kmt_metadata_namespace"] = info["namespace"]
         self.local_vars["kmt_metadata_name"] = info["name"]
 
+    def validate(self):
+        """
+        Validation of some minimum requirements for the manifest
+        """
+        if "metadata" not in self.spec:
+            raise exception.KMTManifestException("Missing metadata on manifest")
+
+        metadata = self.spec.get("metadata")
+        if not isinstance(metadata, dict):
+            raise exception.KMTManifestException("Invalid metadata on manifest")
+
+        if "name" not in metadata:
+            raise exception.KMTManifestException("Missing name on manifest metadata")
+
+        name = metadata.get("name")
+        if not isinstance(name, str):
+            raise exception.KMTManifestException("Invalid type or missing manifest name")
+
+        if name == "":
+            raise exception.KMTManifestException("Empty manifest name on manifest")
+
+        if "kind" not in self.spec:
+            raise exception.KMTManifestException("Missing kind on manifest")
+        kind = self.spec.get("kind")
+
+        if not isinstance(kind, str) or kind == "":
+            raise exception.KMTManifestException("Invalid type or missing kind on manifest")
+
+        if "annotations" in metadata:
+            annotations = metadata.get("annotations")
+            if not isinstance(annotations, dict):
+                raise exception.KMTManifestException("Invalid type for annotations on manifest")
+
+        if "labels" in metadata:
+            labels = metadata.get("labels")
+            if not isinstance(labels, dict):
+                raise exception.KMTManifestException("Invalid type for labels on manifest")
+
     def get_metadata(self):
         metadata = self.spec.get("metadata")
 
