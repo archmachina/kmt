@@ -88,9 +88,63 @@ class Manifest:
 
         return Templater(overlay, effective_vars)
 
+    def get_info(self, default_value=None):
+        # api version
+        # Don't use the 'default_value' yet as we want to know whether it exists first
+        api_version = self.spec.get("apiVersion")
+
+        # group and version
+        group = default_value
+        version = default_value
+        if isinstance(api_version, str) and api_version != "":
+            split = api_version.split("/")
+
+            if len(split) == 1:
+                version = split[0]
+            elif len(split) == 2:
+                group = split[0]
+                version = split[1]
+
+        # Update the api_version to the default, if it didn't exist or was None
+        if api_version is None:
+            api_version = default_value
+
+        # Kind
+        kind = self.spec.get("kind", default_value)
+
+        # metadata
+        metadata = self.get_metadata()
+
+        # Name and Namespace
+        name = metadata.get("name", default_value)
+        namespace = metadata.get("namespace", default_value)
+
+        # Annotations
+        annotations = self.get_annotations()
+
+        # Labels
+        labels = self.get_labels()
+
+        # Manifest alias
+        alias = annotations.get("kmt/alias", default_value)
+
+        return {
+            "group": group,
+            "version": version,
+            "kind": kind,
+            "api_version": api_version,
+            "namespace": namespace,
+            "name": name,
+            "alias": alias,
+            "manifest": self,
+            "metadata": metadata,
+            "annotations": annotations,
+            "labels": labels
+        }
+
     def refresh_metadata(self):
 
-        info = util.extract_manifest_info(self.spec, default_value="")
+        info = self.get_info(default_value="")
 
         self.local_vars["kmt_metadata_group"] = info["group"]
         self.local_vars["kmt_metadata_version"] = info["version"]
@@ -144,25 +198,6 @@ class Manifest:
             raise exception.KMTManifestException("Missing metadata on manifest")
 
         return metadata
-
-    def get_gvk(self):
-
-        # group, version and kind
-        group = None
-        version = None
-        kind = self.spec.get("kind")
-
-        api_version = self.spec.get("apiVersion")
-        if isinstance(api_version, str) and api_version != "":
-            split = api_version.split("/")
-
-            if len(split) == 1:
-                version = split[0]
-            elif len(split) == 2:
-                group = split[0]
-                version = split[1]
-
-        return (group, version, kind)
 
     def get_annotations(self):
         metadata = self.get_metadata()

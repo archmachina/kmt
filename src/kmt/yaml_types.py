@@ -134,7 +134,7 @@ class LookupConfigMap(YamlTag):
         if len(matches) > 1:
             raise exception.KMTTemplateException(f"Found multiple matches for configmap: {self.name}")
 
-        info = util.extract_manifest_info(matches[0].spec)
+        info = matches[0].get_info()
 
         return info["name"]
 
@@ -177,7 +177,7 @@ class LookupSecret(YamlTag):
         if len(matches) > 1:
             raise exception.KMTTemplateException(f"Found multiple matches for secret: {self.name}")
 
-        info = util.extract_manifest_info(matches[0].spec)
+        info = matches[0].get_info()
 
         return info["name"]
 

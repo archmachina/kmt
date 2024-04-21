@@ -67,71 +67,6 @@ def hash_manifest(source, hash_type="sha1"):
 
     return hash_string(text, hash_type=hash_type)
 
-def extract_manifest_info(manifest:core.Manifest, default_value=None):
-    validate(isinstance(manifest, (dict, core.Manifest)), "Invalid manifest supplied to extract_manifest_info")
-
-    if isinstance(manifest, core.Manifest):
-        manifest = manifest.spec
-
-    # api version
-    # Don't use the 'default_value' yet as we want to know whether it exists first
-    api_version = manifest.get("apiVersion")
-
-    # group and version
-    group = default_value
-    version = default_value
-    if isinstance(api_version, str) and api_version != "":
-        split = api_version.split("/")
-
-        if len(split) == 1:
-            version = split[0]
-        elif len(split) == 2:
-            group = split[0]
-            version = split[1]
-
-    # Update the api_version to the default, if it didn't exist or was None
-    if api_version is None:
-        api_version = default_value
-
-    # Kind
-    kind = manifest.get("kind", default_value)
-
-    # metadata
-    metadata = manifest.get("metadata")
-    if not isinstance(metadata, dict):
-        raise exception.KMTManifestException("Invalid metadata type on manifest")
-
-    # Name and Namespace
-    name = metadata.get("name", default_value)
-    namespace = metadata.get("namespace", default_value)
-
-    # Annotations
-    annotations = metadata.get("annotations", {})
-    if not isinstance(annotations, dict):
-        raise exception.KMTManifestException("Invalid annotations type on manifest")
-
-    # Labels
-    labels = metadata.get("labels", {})
-    if not isinstance(labels, dict):
-        raise exception.KMTManifestException("Invalid labels type on manifest")
-
-    # Manifest alias
-    alias = annotations.get("kmt/alias", default_value)
-
-    return {
-        "group": group,
-        "version": version,
-        "kind": kind,
-        "api_version": api_version,
-        "namespace": namespace,
-        "name": name,
-        "alias": alias,
-        "manifest": manifest,
-        "metadata": metadata,
-        "annotations": annotations,
-        "labels": labels
-    }
-
 def walk_object(object, callback, update=False):
     validate(object is not None, "Invalid object supplied to walk_object")
     validate(callable(callback), "Invalid callback supplied to walk_object")
@@ -413,7 +348,7 @@ def find_manifests(search, manifests, *, multiple, current_namespace=None):
 
     for manifest in manifests:
 
-        info = extract_manifest_info(manifest)
+        info = manifest.get_info()
 
         if "group" in search and search["group"] != info["group"]:
             continue

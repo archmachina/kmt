@@ -120,11 +120,13 @@ class StepSupportMetadata(core.StepSupportHandler):
 
         for manifest in working_manifests:
             templater = manifest.get_templater()
+            info = manifest.get_info()
 
-            group, version, kind = manifest.get_gvk()
-            metadata = manifest.get_metadata()
-            namespace = metadata.get("namespace")
-            name = metadata.get("name")
+            group = info["group"]
+            version = info["version"]
+            kind = info["kind"]
+            namespace = info["namespace"]
+            name = info["name"]
 
             # k8s group match
             match_group = templater.resolve(self.match_group, (str, type(None)))

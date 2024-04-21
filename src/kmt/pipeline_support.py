@@ -28,7 +28,7 @@ class PipelineSupportOrdering(core.PipelineSupportHandler):
                 "name",
             ]
 
-            info = util.extract_manifest_info(manifest, default_value="")
+            info = manifest.get_info(default_value="")
 
             return ":".join([info.get(key, "") for key in keys])
 
@@ -59,8 +59,8 @@ class PipelineSupportRenameHash(core.PipelineSupportHandler):
 
         # Rename any objects that require a hash suffix
         for manifest in self.pipeline.manifests:
-            info = util.extract_manifest_info(manifest)
-            annotations = info["annotations"]
+            info = manifest.get_info()
+            annotations = manifest.get_annotations()
 
             if "kmt/rename-hash" not in annotations:
                 continue
@@ -84,7 +84,7 @@ class PipelineSupportRenameHash(core.PipelineSupportHandler):
         kind_map = {}
 
         for manifest in self.pipeline.manifests:
-            info = util.extract_manifest_info(manifest)
+            info = manifest.get_info()
 
             annotations = info["annotations"]
             namespace = info["namespace"]
@@ -131,7 +131,7 @@ class PipelineSupportRenameHash(core.PipelineSupportHandler):
         }
 
         for manifest in self.pipeline.manifests:
-            info = util.extract_manifest_info(manifest)
+            info = manifest.get_info()
 
             source_namespace = info["namespace"]
             source_kind = info["kind"]
