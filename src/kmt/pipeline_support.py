@@ -158,36 +158,6 @@ class PipelineSupportRenameHash(core.PipelineSupportHandler):
                             )
 
 
-    def _lookup_rename(self, value:str, info:dict, mapping:dict):
-        # Find the value in the mapping
-
-        if not isinstance(value, str):
-            return value
-
-        if value not in mapping["pre-hash-name"]:
-            return value
-
-        pre_hash_names = mapping["pre-hash-name"][info["pre-hash-name"]]
-        namespaces = mapping["namespace"][info["namespace"]]
-        kind = mapping["kind"][info["kind"]]
-
-        working = pre_hash_names.intersection(namespaces)
-        working = working.intersection(kind)
-
-        if len(working) > 1:
-            raise exception.KMTManifestException(f"Multiple matches for hash rename value: {value}")
-
-        if len(working) < 1:
-            return value
-
-        manifest_match = working.pop()
-        info = util.extract_manifest_info(manifest_match)
-
-        logger.debug(f"Renaming value from {value} to {info['name']}")
-
-        return info["name"]
-
-
 class PipelineSupportResolveTags(core.PipelineSupportHandler):
     def pre(self):
         pass
@@ -198,16 +168,16 @@ class PipelineSupportResolveTags(core.PipelineSupportHandler):
         if not self.pipeline.root_pipeline:
             return
 
+        def _resolve_reference(current_manifest, item):
+            if isinstance(item, yaml_types.YamlTag):
+                return item.resolve(current_manifest)
+
+            return item
+
         # Call _resolve_reference for all nodes in the manifest to see if replacement
         # is required
         for manifest in self.pipeline.manifests:
-            util.walk_object(manifest.spec, lambda x: self._resolve_reference(manifest, x), update=True)
-
-    def _resolve_reference(self, current_manifest, item):
-        if isinstance(item, yaml_types.YamlTag):
-            return item.resolve(current_manifest)
-
-        return item
+            util.walk_object(manifest.spec, lambda x: _resolve_reference(manifest, x), update=True)
 
 class PipelineSupportCleanup(core.PipelineSupportHandler):
     def pre(self):
@@ -219,20 +189,17 @@ class PipelineSupportCleanup(core.PipelineSupportHandler):
         if not self.pipeline.root_pipeline:
             return
 
+        # List of annotations that we should make sure aren't present on the
+        # output manifests
         annotations_list = [
             "kmt/alias",
+            "kmt/pre-hash-name",
             "kmt/rename-hash"
         ]
 
         # Remove kmt specific annotations
         for manifest in self.pipeline.manifests:
-            metadata = manifest.spec.get("metadata")
-            if not isinstance(metadata, dict):
-                continue
-
-            annotations = metadata.get("annotations")
-            if not isinstance(annotations, dict):
-                continue
+            annotations = manifest.get_annotations()
 
             for key in annotations_list:
                 if key in annotations:
