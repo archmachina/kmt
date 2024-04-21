@@ -48,12 +48,12 @@ class Manifest:
 
         # Add annotations, if not present
         annotations = metadata.get("annotations")
-        if annotations is not None:
-            if not isinstance(annotations, dict):
-                raise exception.KMTManifestException("Invalid type for annotations on manifest")
-        else:
+        if annotations is None:
             annotations = {}
             metadata["annotations"] = annotations
+
+        if not isinstance(annotations, dict):
+            raise exception.KMTManifestException("Invalid type for annotations on manifest")
 
         # alias
         name = metadata.get("name")
@@ -98,6 +98,59 @@ class Manifest:
         self.local_vars["kmt_metadata_api_version"] = info["api_version"]
         self.local_vars["kmt_metadata_namespace"] = info["namespace"]
         self.local_vars["kmt_metadata_name"] = info["name"]
+
+    def get_metadata(self):
+        metadata = self.spec.get("metadata")
+
+        if not isinstance(metadata, dict):
+            raise exception.KMTManifestException("Missing metadata on manifest")
+
+        return metadata
+
+    def get_gvk(self):
+
+        # group, version and kind
+        group = None
+        version = None
+        kind = self.spec.get("kind")
+
+        api_version = self.spec.get("apiVersion")
+        if isinstance(api_version, str) and api_version != "":
+            split = api_version.split("/")
+
+            if len(split) == 1:
+                version = split[0]
+            elif len(split) == 2:
+                group = split[0]
+                version = split[1]
+
+        return (group, version, kind)
+
+    def get_annotations(self):
+        metadata = self.get_metadata()
+
+        annotations = metadata.get("annotations")
+        if annotations is None:
+            annotations = {}
+            metadata["annotations"] = annotations
+
+        if not isinstance(annotations, dict):
+            raise exception.KMTManifestException("Invalid annotations type on manifest")
+
+        return annotations
+
+    def get_labels(self):
+        metadata = self.get_metadata()
+
+        labels = metadata.get("labels")
+        if labels is None:
+            labels = {}
+            metadata["labels"] = labels
+
+        if not isinstance(labels, dict):
+            raise exception.KMTManifestException("Invalid labels type on manifest")
+
+        return labels
 
 class Common:
     def __init__(self):
