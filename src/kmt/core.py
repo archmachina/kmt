@@ -379,13 +379,17 @@ class Pipeline:
         # Config defaults - vars that can be overridden by the supplied vars
         # Don't template the vars - These will be templated when processed in a step
         config_defaults = util.extract_property(pipeline_spec, "defaults", default={})
-        config_defaults = templater.resolve(config_defaults, dict, template=False)
+        config_defaults = templater.resolve(config_defaults, (dict, type(None)), template=False)
+        if config_defaults is None:
+            config_defaults = {}
         util.validate(isinstance(config_defaults, dict), "Config 'defaults' is not a dictionary")
 
         # Config vars - vars that can't be overridden
         # Don't template the vars - These will be templated when processed in a step
         config_vars = util.extract_property(pipeline_spec, "vars", default={})
-        config_vars = templater.resolve(config_vars, dict, template=False)
+        config_vars = templater.resolve(config_vars, (dict, type(None)), template=False)
+        if config_vars is None:
+            config_vars = {}
         util.validate(isinstance(config_vars, dict), "Config 'vars' is not a dictionary")
 
         # Pipeline - list of the steps to run for this pipeline
