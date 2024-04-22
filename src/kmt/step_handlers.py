@@ -41,6 +41,9 @@ class StepHandlerPipeline(core.StepHandler):
         # Resolve pass_vars_filter
         pass_vars_filter = templater.resolve(self.pass_vars_filter, list)
 
+        # Resolve vars
+        step_vars = templater.resolve(self.vars, dict)
+
         #
         # Determine all of the vars to pass to the new pipeline
         pipeline_vars = {}
@@ -51,13 +54,23 @@ class StepHandlerPipeline(core.StepHandler):
                 pipeline_vars.update(self.state.pipeline.vars)
             else:
                 for var_name in pass_vars_filter:
-                    if var_name not in self.state.pipeline.vars:
+                    split = var_name.split("=")
+                    if len(split) == 1:
+                        target_var = split[0]
+                        source_var = split[0]
+                    elif len(split) == 2:
+                        target_var = split[0]
+                        source_var = split[1]
+                    else:
+                        raise exception.KMTManifestException("Invalid syntax for variable rename in pass_vars_filter")
+
+                    if source_var not in self.state.pipeline.vars:
                         continue
 
-                    pipeline_vars[var_name] = self.state.pipeline.vars[var_name]
+                    pipeline_vars[target_var] = self.state.pipeline.vars[source_var]
 
         # Resolve any vars specified in the 'vars' parameter and update pass_vars
-        new_vars = templater.resolve(self.vars, dict, recursive=True)
+        new_vars = templater.resolve(step_vars, dict, recursive=True)
         pipeline_vars.update(new_vars)
 
         pipeline_manifests = []

@@ -200,6 +200,8 @@ def extract_property(spec, key, /, default=None, required=False):
 
     # Retrieve value
     val = spec.pop(key)
+    if val is None:
+        return default
 
     return val
 
