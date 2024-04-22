@@ -373,7 +373,7 @@ def find_manifests(search, manifests, *, multiple, current_namespace=None):
         if "pattern" in search and search["pattern"] is not None and not re.search(search["pattern"], info["name"]):
             continue
 
-        if "alias" in search and search["alias"] != info["alias"]:
+        if "alias" in search and (search["alias"] != info["alias"] or search["alias"] == info["name"]):
             continue
 
         matches.append(manifest)

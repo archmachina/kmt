@@ -106,24 +106,11 @@ class LookupConfigMap(YamlTag):
         manifests = self.get_manifests(scope)
 
         spec = {
-            "kind": "ConfigMap"
+            "kind": "ConfigMap",
+            "alias": self.name
         }
 
-        results = util.find_manifests(spec, manifests, multiple=True, current_namespace=current_namespace)
-
-        matches = []
-        for manifest in results:
-            # Retrieve the alias and name
-            metadata = manifest.spec.get("metadata")
-            name = metadata.get("name")
-
-            annotations = metadata.get("annotations")
-            alias = annotations.get("kmt/alias")
-
-            # Match based on the original name of the manifest or the name, which
-            # may have been updated
-            if self.name == alias or self.name == name:
-                matches.append(manifest)
+        matches = util.find_manifests(spec, manifests, multiple=True, current_namespace=current_namespace)
 
         if len(matches) < 1:
             raise exception.KMTTemplateException(f"Could not find matching configmap: {self.name}")
@@ -146,24 +133,11 @@ class LookupSecret(YamlTag):
         manifests = self.get_manifests(scope)
 
         spec = {
-            "kind": "Secret"
+            "kind": "Secret",
+            "alias": self.name
         }
 
-        results = util.find_manifests(spec, manifests, multiple=True, current_namespace=current_namespace)
-
-        matches = []
-        for manifest in results:
-            # Retrieve the alias and name
-            metadata = manifest.spec.get("metadata")
-            name = metadata.get("name")
-
-            annotations = metadata.get("annotations")
-            alias = annotations.get("kmt/alias")
-
-            # Match based on the original name of the manifest or the name, which
-            # may have been updated
-            if self.name == alias or self.name == name:
-                matches.append(manifest)
+        matches = util.find_manifests(spec, manifests, multiple=True, current_namespace=current_namespace)
 
         if len(matches) < 1:
             raise exception.KMTTemplateException(f"Could not find matching secret: {self.name}")
