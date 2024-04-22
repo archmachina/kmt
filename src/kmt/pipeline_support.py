@@ -65,10 +65,30 @@ class PipelineSupportRenameHash(core.PipelineSupportHandler):
             if "kmt/rename-hash" not in annotations:
                 continue
 
-            annotations.pop("kmt/rename-hash")
-            annotations["kmt/pre-hash-name"] = info["name"]
+            rename_hash = util.coerce_value((bool, str), annotations.pop("kmt/rename-hash"))
 
-            hash = util.hash_manifest(manifest.spec, hash_type="short10")
+            # Skip if the annotation is null
+            if rename_hash is None:
+                continue
+
+            # Check if it's a bool type value
+            if isinstance(rename_hash, bool):
+                if not rename_hash:
+                    continue
+
+                rename_hash = "short10"
+
+            # Skip on empty string
+            if rename_hash == "":
+                continue
+
+            # Not bool and not empty, so check for allowed types
+            allowed_suffix = ["short10", "short8"]
+            if rename_hash not in allowed_suffix:
+                raise exception.KMTManifestException(f"Disallowed type ({rename_hash}) for kmt/rename-hash. Allowed values: {allowed_suffix}, or bool-type expression")
+
+            annotations["kmt/pre-hash-name"] = info["name"]
+            hash = util.hash_manifest(manifest.spec, hash_type=rename_hash)
 
             # Rename based on the current manifest name.
             # Don't use alias as this is only used to find the manifest. The name may have
