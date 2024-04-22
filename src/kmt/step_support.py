@@ -111,6 +111,8 @@ class StepSupportMetadata(core.StepSupportHandler):
 
         self.match_kind = util.extract_property(step_def, "match_kind")
 
+        self.exclude_kind = util.extract_property(step_def, "exclude_kind")
+
         self.match_namespace = util.extract_property(step_def, "match_namespace")
 
         self.match_name = util.extract_property(step_def, "match_name")
@@ -147,6 +149,16 @@ class StepSupportMetadata(core.StepSupportHandler):
                     match_kind = [match_kind]
 
                 if not any((x.lower() == kind.lower()) for x in match_kind):
+                    self.state.working_manifests.remove(manifest)
+                    continue
+
+            # k8s kind exclude
+            exclude_kind = templater.resolve(self.exclude_kind, (list, str, type(None)))
+            if exclude_kind is not None:
+                if isinstance(exclude_kind, str):
+                    exclude_kind = [exclude_kind]
+
+                if any((x.lower() == kind.lower()) for x in exclude_kind):
                     self.state.working_manifests.remove(manifest)
                     continue
 
