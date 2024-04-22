@@ -227,7 +227,7 @@ class Manifest:
 
 class Common:
     def __init__(self):
-        self.environment = jinja2.Environment()
+        self.environment = jinja2.Environment(undefined=jinja2.StrictUndefined)
 
         # Make sure the jinja2 environment has these properties
         self.environment.extend(kmt_pipeline=None, kmt_manifest=None)
