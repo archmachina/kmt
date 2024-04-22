@@ -123,9 +123,68 @@ class PipelineSupportRenameHash(core.PipelineSupportHandler):
         # a list of pre hash names by namespace and kind
 
         pattern_mapping = {
+            "Job": {
+                "Secret": [
+                    "spec.template.spec.initContainers[*].env[*].valueFrom.secretKeyRef.name",
+                    "spec.template.spec.containers[*].env[*].valueFrom.secretKeyRef.name",
+                    "spec.template.spec.initContainers[*].envFrom[*].secretRef.name",
+                    "spec.template.spec.containers[*].envFrom[*].secretRef.name",
+                    "spec.template.spec.volumes[*].secret.secretName"
+                ],
+                "ConfigMap": [
+                    "spec.template.spec.initContainers[*].env[*].valueFrom.configMapKeyRef.name",
+                    "spec.template.spec.containers[*].env[*].valueFrom.configMapKeyRef.name",
+                    "spec.template.spec.initContainers[*].envFrom[*].configMapRef.name",
+                    "spec.template.spec.containers[*].envFrom[*].configMapRef.name",
+                    "spec.template.spec.volumes[*].configMap.name",
+                ]
+            },
             "Deployment": {
                 "Secret": [
-                    "spec.template.spec.initContainers[*].env[*].valueFrom.secretKeyRef.name"
+                    "spec.template.spec.initContainers[*].env[*].valueFrom.secretKeyRef.name",
+                    "spec.template.spec.containers[*].env[*].valueFrom.secretKeyRef.name",
+                    "spec.template.spec.initContainers[*].envFrom[*].secretRef.name",
+                    "spec.template.spec.containers[*].envFrom[*].secretRef.name",
+                    "spec.template.spec.volumes[*].secret.secretName"
+                ],
+                "ConfigMap": [
+                    "spec.template.spec.initContainers[*].env[*].valueFrom.configMapKeyRef.name",
+                    "spec.template.spec.containers[*].env[*].valueFrom.configMapKeyRef.name",
+                    "spec.template.spec.initContainers[*].envFrom[*].configMapRef.name",
+                    "spec.template.spec.containers[*].envFrom[*].configMapRef.name",
+                    "spec.template.spec.volumes[*].configMap.name",
+                ]
+            },
+            "StatefulSet": {
+                "Secret": [
+                    "spec.template.spec.initContainers[*].env[*].valueFrom.secretKeyRef.name",
+                    "spec.template.spec.containers[*].env[*].valueFrom.secretKeyRef.name",
+                    "spec.template.spec.initContainers[*].envFrom[*].secretRef.name",
+                    "spec.template.spec.containers[*].envFrom[*].secretRef.name",
+                    "spec.template.spec.volumes[*].secret.secretName"
+                ],
+                "ConfigMap": [
+                    "spec.template.spec.initContainers[*].env[*].valueFrom.configMapKeyRef.name",
+                    "spec.template.spec.containers[*].env[*].valueFrom.configMapKeyRef.name",
+                    "spec.template.spec.initContainers[*].envFrom[*].configMapRef.name",
+                    "spec.template.spec.containers[*].envFrom[*].configMapRef.name",
+                    "spec.template.spec.volumes[*].configMap.name",
+                ]
+            },
+            "DaemonSet": {
+                "Secret": [
+                    "spec.template.spec.initContainers[*].env[*].valueFrom.secretKeyRef.name",
+                    "spec.template.spec.containers[*].env[*].valueFrom.secretKeyRef.name",
+                    "spec.template.spec.initContainers[*].envFrom[*].secretRef.name",
+                    "spec.template.spec.containers[*].envFrom[*].secretRef.name",
+                    "spec.template.spec.volumes[*].secret.secretName"
+                ],
+                "ConfigMap": [
+                    "spec.template.spec.initContainers[*].env[*].valueFrom.configMapKeyRef.name",
+                    "spec.template.spec.containers[*].env[*].valueFrom.configMapKeyRef.name",
+                    "spec.template.spec.initContainers[*].envFrom[*].configMapRef.name",
+                    "spec.template.spec.containers[*].envFrom[*].configMapRef.name",
+                    "spec.template.spec.volumes[*].configMap.name",
                 ]
             }
         }
