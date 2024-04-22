@@ -230,6 +230,9 @@ class PipelineSupportRenameHash(core.PipelineSupportHandler):
                         if not isinstance(match_value, str) or match_value == "":
                             continue
 
+                        if source_namespace not in rename_map:
+                            continue
+
                         if match_value in rename_map[source_namespace][target_kind]:
                             pattern_match.full_path.update(
                                 manifest.spec,
