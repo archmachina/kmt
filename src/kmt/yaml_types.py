@@ -113,19 +113,16 @@ class LookupConfigMap(YamlTag):
 
         matches = []
         for manifest in results:
+            # Retrieve the alias and name
             metadata = manifest.spec.get("metadata")
-            if metadata is None:
-                continue
+            name = metadata.get("name")
 
             annotations = metadata.get("annotations")
-            if annotations is None:
-                continue
-
             alias = annotations.get("kmt/alias")
-            if alias is None:
-                continue
 
-            if alias == self.name:
+            # Match based on the original name of the manifest or the name, which
+            # may have been updated
+            if self.name == alias or self.name == name:
                 matches.append(manifest)
 
         if len(matches) < 1:
@@ -156,19 +153,16 @@ class LookupSecret(YamlTag):
 
         matches = []
         for manifest in results:
+            # Retrieve the alias and name
             metadata = manifest.spec.get("metadata")
-            if metadata is None:
-                continue
+            name = metadata.get("name")
 
             annotations = metadata.get("annotations")
-            if annotations is None:
-                continue
-
             alias = annotations.get("kmt/alias")
-            if alias is None:
-                continue
 
-            if alias == self.name:
+            # Match based on the original name of the manifest or the name, which
+            # may have been updated
+            if self.name == alias or self.name == name:
                 matches.append(manifest)
 
         if len(matches) < 1:
