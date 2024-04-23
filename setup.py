@@ -19,7 +19,7 @@ setup_args = {
     "download_url": "https://pypi.org/project/kmt/",
     "entry_points": {"console_scripts": ["kmt = kmt:main"]},
     "package_dir": {"": "src"},
-    "install_requires": ["PyYAML>=6.0.0", "Jinja2>=3.1.0", "ttast>=0.2.0"],
+    "install_requires": ["PyYAML>=6.0.0", "Jinja2>=3.1.0", "jsonpatch>=1.33", "jsonpath-ng>=1.6.1"],
 }
 
 if __name__ == "__main__":
