@@ -13,7 +13,7 @@ import kmt.j2support as j2support
 
 logger = logging.getLogger(__name__)
 
-def process_args() -> int:
+def main():
     """
     Processes kmt command line arguments, initialises and runs the pipeline to perform text processing
     """
@@ -53,27 +53,27 @@ def process_args() -> int:
         for manifest in manifests:
             print(manifest)
 
+    except BrokenPipeError as e:
+        try:
+            print("Broken Pipe", file=sys.stderr)
+            if not sys.stderr.closed:
+                sys.stderr.close()
+        except:
+            pass
+
+        sys.exit(1)
+
     except Exception as e:  # pylint: disable=broad-exception-caught
         if debug:
             logger.error(e, exc_info=True, stack_info=True)
         else:
             logger.error(e)
-        return 1
 
-    return 0
-
-
-def main():
-    """
-    Entrypoint for the module.
-    Minor exception handling is performed, along with return code processing and
-    flushing of stdout on program exit.
-    """
-    try:
-        ret = process_args()
-        sys.stdout.flush()
-        sys.exit(ret)
-    except Exception as e:  # pylint: disable=broad-exception-caught
-        logging.getLogger(__name__).exception(e)
-        sys.stdout.flush()
         sys.exit(1)
+
+    try:
+        sys.stdout.flush()
+    except Exception as e:
+        sys.exit(1)
+
+    sys.exit(0)

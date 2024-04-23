@@ -19,6 +19,21 @@ class PipelineSupportOrdering(core.PipelineSupportHandler):
         if not self.pipeline.root_pipeline:
             return
 
+        working = self.pipeline.manifests
+        working = sorted(working, key=lambda x: x.spec.get("name", ""))
+        working = sorted(working, key=lambda x: x.spec.get("namespace", ""))
+        working = sorted(working, key=lambda x: x.spec.get("kind", ""))
+        working = sorted(working, key=lambda x: x.spec.get("version", ""))
+        working = sorted(working, key=lambda x: x.spec.get("group", ""))
+        working = sorted(
+            working,
+            key=lambda x: x.spec.get("kind", "").casefold() != "configmap" and x.spec.get("kind", "").casefold() != "secret"
+        )
+        working = sorted(working, key=lambda x: x.spec.get("kind", "").casefold() != "namespace" )
+
+        self.pipeline.manifests = working
+
+        # Display sorted order
         def _get_metadata_str(manifest):
             keys = [
                 "group",
@@ -32,12 +47,9 @@ class PipelineSupportOrdering(core.PipelineSupportHandler):
 
             return ":".join([info.get(key, "") for key in keys])
 
+        logger.debug("Sorted order:")
         for manifest in self.pipeline.manifests:
             logger.debug(f"metadata: {_get_metadata_str(manifest)}")
-
-        # Don't need a particular ordering, just consistency in output
-        # to allow for easy diff comparison
-        self.pipeline.manifests = sorted(self.pipeline.manifests, key=lambda x: _get_metadata_str(x))
 
 class PipelineSupportRenameHash(core.PipelineSupportHandler):
     def pre(self):
