@@ -287,6 +287,14 @@ class PipelineSupportCleanup(core.PipelineSupportHandler):
                 if key in annotations:
                     annotations.pop(key)
 
+            metadata = manifest.get_metadata()
+
+            if "annotations" in metadata and len(metadata["annotations"]) < 1:
+                metadata.pop("annotations")
+
+            if "labels" in metadata and len(metadata["labels"]) < 1:
+                metadata.pop("labels")
+
 core.default_pipeline_support_handlers.append(PipelineSupportOrdering)
 core.default_pipeline_support_handlers.append(PipelineSupportRenameHash)
 core.default_pipeline_support_handlers.append(PipelineSupportResolveTags)
