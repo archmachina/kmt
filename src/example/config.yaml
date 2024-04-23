@@ -3,92 +3,82 @@ vars:
 
 pipeline:
 
-  - type: stdin
+  - stdin: {}
     apply_tags:
       - stdin
       - "{{ import_tag }}"
 
-  - type: import
-    files:
-      - "example/files/**/*.yaml"
-    recursive: true
+  - import:
+      files:
+        - "example/files/**/*.yaml"
+      recursive: true
     apply_tags:
       - yaml
       - import
       - "{{ import_tag }}"
 
-  - type: replace
-    replace:
-      - key: REPLACE_VALUE_HERE
-        value: "{{ replace_value / 2 }}"
-      - key: "Y..."
-        value: "{{ other_replacement }}"
-        regex: true
-      - key: "TTAST_TAGS"
-        value: "{{ ttast_tags }}"
+  - replace:
+      items:
+        - key: REPLACE_VALUE_HERE
+          value: "{{ replace_value / 2 }}"
+        - key: "Y..."
+          value: "{{ other_replacement }}"
+          regex: true
+        - key: "TTAST_TAGS"
+          value: "{{ ttast_tags }}"
 
-  - type: template
-    vars:
-      override: frog
+  - template:
+      vars:
+        override: frog
     match_any_tags:
       - import
     apply_tags:
       - templated
 
-  - type: template
-    vars:
-      override: "{{ other_replacement }}"
+  - template:
+      vars:
+        override: "{{ other_replacement }}"
     exclude_tags:
       - templated
     apply_tags:
       - templated
 
-  - type: meta
+  - vars:
+      block:
+        document_type: yaml
     match_any_tags:
       - yaml
-    vars:
-      document_type: yaml
 
-  - type: jsonpatch
-    patches:
-      - op: add
-        path: "/metadata/annotations"
-        value: {}
-      - op: add
-        path: "/metadata/annotations/test"
-        value: 10
-      - op: add
-        path: "/metadata/annotations/other"
-        value: 12
+  - jsonpatch:
+      patches:
+        - op: add
+          path: "/metadata/annotations"
+          value: {}
+        - op: add
+          path: "/metadata/annotations/test"
+          value: 10
+        - op: add
+          path: "/metadata/annotations/other"
+          value: 12
     match_kind: "StatefulSet|Deployment"
 
-  - type: sum
+  - sum: {}
 
-  - type: metadata
-    namespace: tester
-    labels:
-      app: appname
-    name: "{{ meta.k8s_name|default('unknown') + '-' + meta.shortsum }}"
+  - metadata:
+      namespace: tester
+      name: "{{ metadata_name|default('unknown') + '-' + shortsum }}"
+      labels:
+        app: appname
 
-  - type: metadata
-    annotations:
-      reloader.stakater.com/auto: "true"
+  - metadata:
+      annotations:
+        reloader.stakater.com/auto: "true"
     when:
-      - 'meta.k8s_kind in ["DaemonSet", "StatefulSet", "Deployment"]'
+      - 'metadata_kind in ["DaemonSet", "StatefulSet", "Deployment"]'
 
-  - type: metadata
-    annotations:
-      kubernetes.io/ingress.class: nginx
-      nginx.ingress.kubernetes.io/backend-protocol: HTTPS
+  - metadata:
+      annotations:
+        kubernetes.io/ingress.class: nginx
+        nginx.ingress.kubernetes.io/backend-protocol: HTTPS
     when:
-      - 'meta.k8s_kind in ["Ingress"]'
-
-  - type: stdout
-    prefix: "******** BEGIN ********"
-    suffix: "********  END  ********"
-    match_kind: "StatefulSet|Deployment"
-    # match_name: beatload-dp
-    # when:
-    #   - "'import' in tags or 'stdin' in tags"
-    #   - "meta.k8s_kind|default('') == 'Deployment'"
-      #- "'second' in meta.filename"
+      - 'metadata_kind in ["Ingress"]'
