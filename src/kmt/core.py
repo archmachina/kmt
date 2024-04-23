@@ -404,6 +404,12 @@ class Pipeline:
         accept_manifests = templater.resolve(accept_manifests, bool)
         util.validate(isinstance(accept_manifests, bool), "Invalid type for accept_manifests")
 
+        # Accept vars - A list of the vars that will be accepted for input from the parent/caller
+        accept_vars = util.extract_property(pipeline_spec, "accept_vars", default=[])
+        accept_vars = templater.resolve(accept_vars, list)
+        util.validate(isinstance(accept_vars, list) and all(isinstance(x, str) for x in accept_vars),
+            "Invalid type for accept_vars or members")
+
         # Create manifests out of the dictionary specs passed in
         self._input_manifests = [Manifest(x, pipeline=self) for x in self._input_manifests]
 
@@ -418,6 +424,19 @@ class Pipeline:
         #
         # Merge variables in to the pipeline variables in order
         #
+
+        # Make sure only allowed vars are being passed to this pipeline
+        allowed_var_list = set()
+        allowed_var_list.update(accept_vars)
+        allowed_var_list.update(config_defaults.keys())
+
+        disallowed = []
+        for var_name in pipeline_vars:
+            if var_name not in allowed_var_list:
+                disallowed.append(var_name)
+
+        if len(disallowed) > 0:
+            raise exception.KMTConfigException(f"Invalid vars passed to pipeline: {disallowed}")
 
         # Merge defaults, then supplied vars, then 'vars' in to the pipeline
         # Allows defaults to be overridden by the caller, but then 'vars'
@@ -434,10 +453,23 @@ class Pipeline:
         }
         unresolved_vars.update(builtin)
 
+        # Create a list of vars that shouldn't be templated as it either doesn't apply or they have
+        # already been templated and shouldn't be templated again.
+        # Need to add the pipeline_vars keys, but remove any that have been defined in
+        # the pipeline 'vars', as they haven't been templated yet
+        ignore_list = set(builtin.keys())
+
+        for key in pipeline_vars:
+            ignore_list.add(key)
+
+        for key in config_vars:
+            if key in ignore_list:
+                ignore_list.remove(key)
+
         # Resolve all vars from unresolved vars and store the result in the actual
         # vars property.
         # pipeline.vars can be used to access variables that have already been resolved
-        self.vars = util.resolve_var_refs(unresolved_vars, self.common.environment, ignore_list=builtin.keys())
+        self.vars = util.resolve_var_refs(unresolved_vars, self.common.environment, ignore_list=ignore_list)
 
         # root_pipeline defines whether to act as the final/top level pipeline
         self.root_pipeline = root_pipeline

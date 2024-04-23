@@ -53,3 +53,8 @@ class KMTTemplateException(Exception):
     """
     Error performing templating
     """
+
+class KMTConfigException(Exception):
+    """
+    Error in the pipeline configuration
+    """

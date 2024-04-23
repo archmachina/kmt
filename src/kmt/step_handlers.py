@@ -22,8 +22,7 @@ class StepHandlerPipeline(core.StepHandler):
         # Path to other pipeline
         self.path = util.extract_property(step_def, "path")
 
-        self.pass_vars = util.extract_property(step_def, "pass_vars", default=False)
-        self.pass_vars_filter = util.extract_property(step_def, "pass_vars_filter", default=[])
+        self.pass_vars = util.extract_property(step_def, "pass_vars", default=[])
         self.vars = util.extract_property(step_def, "vars", default={})
 
         self.pass_manifests = util.extract_property(step_def, "pass_manifests", default=False)
@@ -39,7 +38,7 @@ class StepHandlerPipeline(core.StepHandler):
         path = templater.resolve(self.path, str)
 
         # Resolve pass_vars_filter
-        pass_vars_filter = templater.resolve(self.pass_vars_filter, list)
+        pass_vars = templater.resolve(self.pass_vars, list)
 
         # Resolve vars
         step_vars = templater.resolve(self.vars, dict)
@@ -49,25 +48,21 @@ class StepHandlerPipeline(core.StepHandler):
         pipeline_vars = {}
 
         # Are we passing existing vars to the new pipline
-        if self.pass_vars:
-            if len(pass_vars_filter) == 0:
-                pipeline_vars.update(self.state.pipeline.vars)
+        for var_name in pass_vars:
+            split = var_name.split("=")
+            if len(split) == 1:
+                target_var = split[0]
+                source_var = split[0]
+            elif len(split) == 2:
+                target_var = split[0]
+                source_var = split[1]
             else:
-                for var_name in pass_vars_filter:
-                    split = var_name.split("=")
-                    if len(split) == 1:
-                        target_var = split[0]
-                        source_var = split[0]
-                    elif len(split) == 2:
-                        target_var = split[0]
-                        source_var = split[1]
-                    else:
-                        raise exception.KMTManifestException("Invalid syntax for variable rename in pass_vars_filter")
+                raise exception.KMTManifestException("Invalid syntax for variable rename in pass_vars")
 
-                    if source_var not in self.state.pipeline.vars:
-                        continue
+            if source_var not in self.state.pipeline.vars:
+                continue
 
-                    pipeline_vars[target_var] = self.state.pipeline.vars[source_var]
+            pipeline_vars[target_var] = self.state.pipeline.vars[source_var]
 
         # Resolve any vars specified in the 'vars' parameter and update pass_vars
         new_vars = templater.resolve(step_vars, dict, recursive=True)
