@@ -17,7 +17,7 @@ setup_args = {
     "keywords": ["Kubernetes", "Manifest", "Transform"],
     "url": "https://github.com/archmachina/kmt",
     "download_url": "https://pypi.org/project/kmt/",
-    "entry_points": {"console_scripts": ["kmt = kmt:main"]},
+    "entry_points": {"console_scripts": ["kmt = kmt.cli:main"]},
     "package_dir": {"": "src"},
     "install_requires": ["PyYAML>=6.0.0", "Jinja2>=3.1.0", "jsonpatch>=1.33", "jsonpath-ng>=1.6.1"],
 }
