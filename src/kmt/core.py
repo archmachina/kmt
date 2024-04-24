@@ -227,7 +227,7 @@ class Manifest:
 
 class Common:
     def __init__(self):
-        self.environment = jinja2.Environment(undefined=jinja2.StrictUndefined)
+        self.environment = jinja2.Environment(undefined=jinja2.StrictUndefined, keep_trailing_newline=True)
 
         # Make sure the jinja2 environment has these properties
         self.environment.extend(kmt_pipeline=None, kmt_manifest=None)
