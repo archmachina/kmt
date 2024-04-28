@@ -155,61 +155,94 @@ class StepHandlerVars(core.StepHandler):
     """
     """
     def extract(self, step_def):
-        self.pipeline_var_list = util.extract_property(step_def, "pipeline", default=[])
+        self.inline = util.extract_property(step_def, "inline", default={})
 
-        self.manifest_var_list = util.extract_property(step_def, "manifest", default=[])
+        self.vars_files = util.extract_property(step_def, "files", default=[])
+
+        self.scope = util.extract_property(step_def, "scope", default="pipeline")
+
+        self.recursive = util.extract_property(step_def, "recursive", default=False)
 
     def run(self):
         working_manifests = self.state.working_manifests.copy()
-        templater = self.state.pipeline.get_templater()
+        templater:core.Templater = self.state.pipeline.get_templater()
 
-        pipeline_var_list = templater.resolve(self.pipeline_var_list, (list, type(None)))
-        if pipeline_var_list is not None:
-            pipeline_var_list = [templater.resolve(x, dict) for x in pipeline_var_list]
-            # pipeline_vars should be a list of dictionaries now
+        # scope
+        scope = templater.resolve(self.scope, str).casefold()
+        util.validate(scope == "pipeline" or scope == "manifest", "Scope must be 'pipeline' or 'manifest'")
 
-            for var_spec in pipeline_var_list:
-                # Extract vars
-                var_spec = var_spec.copy()
-                key = util.extract_property(var_spec, "key")
-                value = util.extract_property(var_spec, "value")
-                util.validate(len(var_spec.keys()) == 0, f"Unknown properties on vars spec: {var_spec.keys()}")
+        # inline
+        inline = templater.resolve(self.inline, (dict, type(None)))
+        if inline is None:
+            inline = {}
+        util.validate(isinstance(inline, dict), "'inline' must be a dictionary")
 
-                # Resolve any templating and type
-                key = templater.resolve(key, str)
-                value = templater.resolve(value, str)
+        # vars_files
+        vars_files = templater.resolve(self.vars_files, (list, type(None)))
+        if vars_files is None:
+            vars_files = []
+        util.validate(isinstance(vars_files, list), "'files' must be a list")
 
-                self.state.pipeline.vars[key] = value
-                logger.debug(f"Set pipeline var {key} -> {value}")
+        vars_files = [templater.resolve(x, str) for x in vars_files]
 
-        for manifest in working_manifests:
-            templater = manifest.get_templater()
+        # recursive
+        recursive = templater.resolve(self.recursive, bool)
 
-            manifest_var_list = templater.resolve(self.manifest_var_list, (list, type(None)))
+        # Vars to set for whichever scope
+        new_vars = {}
 
-            if manifest_var_list is not None:
-                manifest_var_list = [templater.resolve(x, dict) for x in manifest_var_list]
-                # manifest_var_list should be a list of dictionaries now
+        # Determine vars files
+        filenames = set()
+        for var_file in vars_files:
+            logger.debug(f"vars: expanding file glob: {var_file}")
+            matches = glob.glob(var_file, recursive=recursive)
+            for match in matches:
+                filenames.add(match)
 
-                for var_spec in manifest_var_list:
-                    # Extract vars
-                    var_spec = var_spec.copy()
-                    key = util.extract_property(var_spec, "key")
-                    value = util.extract_property(var_spec, "value")
-                    set_pipeline = util.extract_property(var_spec, "pipeline", default=False)
-                    util.validate(len(var_spec.keys()) == 0, f"Unknown properties on vars spec: {var_spec.keys()}")
+        filenames = list(filenames)
+        filenames.sort()
 
-                    # Resolve any templating and type
-                    key = templater.resolve(key, str)
-                    value = templater.resolve(value, str)
-                    set_pipeline = templater.resolve(set_pipeline, bool)
+        # Read vars from files
+        for filename in filenames:
+            logger.debug(f"vars: reading file {filename}")
+            with open(filename, "r", encoding="utf-8") as file:
+                lines = file.read().splitlines()
 
-                    if set_pipeline:
-                        self.state.pipeline.vars[key] = value
-                        logger.debug(f"Set pipeline var {key} -> {value}")
-                    else:
-                        manifest.local_vars[key] = value
-                        logger.debug(f"Set manifest var {key} -> {value}")
+                for line in lines:
+                    split = line.split("=", 1)
+                    if len(split) != 2:
+                        raise exception.KMTConfigException("Invalid format in vars file. Must be 'var_name=...'")
+
+                    new_vars[split[0]] = split[1]
+                    logger.debug(f"Read var_file var {split[0]} -> {split[1]}")
+
+        # Read inline vars
+        for key in inline:
+            new_vars[key] = inline[key]
+            logger.debug(f"Read line var {key} -> {inline[key]}")
+
+        # Resolve all of the new vars
+        # Don't coerce the type to anything, just preserve what it is.
+        # If it is a string or contains string values, these should be templated at this point
+        for key in new_vars:
+            new_vars[key] = templater.resolve(new_vars[key], recursive=True)
+
+        # Set vars on manifest or pipeline scope'
+        if scope == "pipeline":
+            for key in new_vars:
+                self.state.pipeline.vars[key] = new_vars[key]
+                logger.debug(f"Set pipeline var {key} -> {new_vars[key]}")
+        elif scope == "manifest":
+            for manifest in working_manifests:
+                templater = manifest.get_templater()
+
+                for key in new_vars:
+                    # See above comment
+                    manifest.local_vars[key] = new_vars[key]
+                    logger.debug(f"Set manifest var {key} -> {new_vars[key]}")
+        else:
+            raise exception.KMTConfigException("Invalid value for 'scope'. Must be 'pipeline' or 'manifest'")
+
 
 class StepHandlerStdin(core.StepHandler):
     """
