@@ -19,13 +19,6 @@ include:
   - .bdast/python.yaml
   - .bdast/docker.yaml
 
-steps:
-  python_test:
-    during:
-      - +test
-    command:
-      cmd: dfbar -f ./src/Dockerfile -m test ./src
-
 actions:
 
   # Overrides for 'common' actions to perform actions
