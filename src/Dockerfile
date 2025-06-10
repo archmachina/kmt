@@ -7,6 +7,7 @@ ARG use_image=base
 FROM python:3.13.3-slim-bullseye AS base
 
 # Work directory
+RUN mkdir -p /work && chmod 777 /work
 WORKDIR /work
 ENV HOME=/work
 
@@ -19,10 +20,6 @@ RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 COPY requirements.txt /work
 RUN python3 -m pip install --upgrade pip && \
     python3 -m pip install -r /work/requirements.txt
-
-# Local python modules
-RUN mkdir -p /work/modules && chmod 777 /work
-ENV PYTHONPATH=/work/modules
 
 COPY entrypoint /entrypoint
 ENTRYPOINT [ "/entrypoint" ]
@@ -43,6 +40,9 @@ RUN python3 -m pip install -r /work/test-requirements.txt
 # Final image
 FROM ${use_image}
 
+# Copy kmt module
+RUN mkdir /work/modules
+ENV PYTHONPATH=/work/modules
 COPY kmt /work/modules/kmt/
 
 # Save build version
