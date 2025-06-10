@@ -1,7 +1,8 @@
 
 import sys
-import kmt
+import subprocess
 import pytest
+import kmt
 
 class TestCli:
     def test_1(self):
@@ -9,4 +10,10 @@ class TestCli:
 
         with pytest.raises(SystemExit):
             res = kmt.cli.main()
+
+    def test_2(self):
+        # Test running the entrypoint
+        ret = subprocess.call(["/work/bin/entrypoint", "--help"])
+
+        assert ret == 0
 
