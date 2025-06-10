@@ -1,4 +1,8 @@
-FROM python:3.13.3-slim-bullseye
+
+# test_BUILD_OPTS --build-arg use_image=testing
+
+ARG use_image=base
+FROM python:3.13.3-slim-bullseye AS base
 
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -17,3 +21,16 @@ RUN echo "${BUILD_VERSION}" > /build_version.txt
 
 COPY entrypoint /entrypoint
 ENTRYPOINT [ "/entrypoint" ]
+
+FROM base AS testing
+
+COPY tests /work/tests
+
+COPY tests/entrypoint /test-entrypoint
+ENTRYPOINT [ "/test-entrypoint" ]
+
+COPY tests/requirements.txt /work/test-requirements.txt
+RUN python3 -m pip install -r /work/test-requirements.txt
+
+FROM ${use_image}
+

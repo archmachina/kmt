@@ -24,7 +24,7 @@ steps:
     during:
       - +test
     command:
-      cmd: dfbar -f ./src/tests/Dockerfile ./src
+      cmd: dfbar -f ./src/Dockerfile -m test ./src
 
 actions:
 
