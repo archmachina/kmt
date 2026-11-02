@@ -159,10 +159,14 @@ def lookup_hash_representer(dumper: yaml.SafeDumper, lookup_hash: LookupHash):
     return dumper.represent_mapping("!hash", lookup_hash.spec)
 
 def lookup_configmap_representer(dumper: yaml.SafeDumper, lookup_configmap: LookupConfigMap):
-    return dumper.represent_str("!configmap", lookup_configmap.name)
+    # represent_str is bound to the built-in str tag and doesn't accept a
+    # tag argument at all -- represent_scalar is the general method that
+    # takes an explicit tag, which is what a custom tag like !configmap
+    # needs here.
+    return dumper.represent_scalar("!configmap", lookup_configmap.name)
 
 def lookup_secret_representer(dumper: yaml.SafeDumper, lookup_secret: LookupSecret):
-    return dumper.represent_str("!secret", lookup_secret.name)
+    return dumper.represent_scalar("!secret", lookup_secret.name)
 
 
 def lookup_constructor(loader: yaml.SafeLoader, node: yaml.nodes.MappingNode):
