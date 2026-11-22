@@ -245,6 +245,9 @@ class PipelineSupportRenameHash(core.PipelineSupportHandler):
                         if source_namespace not in rename_map:
                             continue
 
+                        if target_kind not in rename_map[source_namespace]:
+                            continue
+
                         if match_value in rename_map[source_namespace][target_kind]:
                             pattern_match.full_path.update(
                                 manifest.spec,

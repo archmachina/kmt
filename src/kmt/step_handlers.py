@@ -268,7 +268,7 @@ class StepHandlerStdin(core.StepHandler):
         docs = [x for x in util.yaml_load_all(content)]
 
         for doc in docs:
-            manifest = core.Manifest(doc, self.state.pipeline)
+            manifest = core.Manifest(doc, pipeline=self.state.pipeline)
 
             self.state.pipeline.manifests.append(manifest)
             self.state.working_manifests.append(manifest)

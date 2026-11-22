@@ -83,7 +83,10 @@ class StepSupportTags(core.StepSupportHandler):
                 for tag in match_all_tags:
                     if tag not in manifest.tags:
                         self.state.working_manifests.remove(manifest)
-                        continue
+                        break
+
+            if manifest not in self.state.working_manifests:
+                continue
 
             exclude_tags = templater.resolve(self.exclude_tags, list)
             exclude_tags = set([templater.resolve(x, str) for x in exclude_tags])
@@ -92,7 +95,7 @@ class StepSupportTags(core.StepSupportHandler):
                 for tag in exclude_tags:
                     if tag in manifest.tags:
                         self.state.working_manifests.remove(manifest)
-                        continue
+                        break
 
     def post(self):
 

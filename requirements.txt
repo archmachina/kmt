@@ -1,4 +1,5 @@
-bdast==0.5.3
-dfbar==0.4.4
-pylint==3.3.7
-
+# Requirements file for CI/CD processes
+dfbar==0.4.6
+requests>=2.32.3
+black
+pylint

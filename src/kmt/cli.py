@@ -30,7 +30,15 @@ def main():
         "-d", action="store_true", dest="debug", help="Enable debug output"
     )
 
-    args = parser.parse_args()
+    # exit_on_error=False means an invalid or missing argument raises
+    # ArgumentError here, rather than argparse printing usage and exiting
+    # itself, so that has to be handled explicitly.
+    try:
+        args = parser.parse_args()
+    except argparse.ArgumentError as e:
+        parser.print_usage(sys.stderr)
+        print(f"{parser.prog}: error: {e}", file=sys.stderr)
+        sys.exit(2)
 
     # Capture argument options
     debug = args.debug
