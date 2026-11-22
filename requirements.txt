@@ -1,5 +1,5 @@
 # Requirements file for CI/CD processes
-dfbar==0.4.6
+dfbar==0.4.7
 requests>=2.32.3
 black
 pylint
